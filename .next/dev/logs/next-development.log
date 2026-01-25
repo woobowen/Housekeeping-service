@@ -1,0 +1,119 @@
+[00:00:01.672] Server  LOG     ✓ Ready in 1172ms
+[00:04:01.799] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:07:25.678] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:12:56.972] Server  LOG     ✓ Compiled in 101ms
+[00:12:57.170] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:13:20.012] Server  LOG     ✓ Compiled in 63ms
+[00:14:18.795] Server  LOG     ✓ Compiled in 83ms
+[00:14:19.255] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:14:43.611] Server  LOG     ✓ Compiled in 112ms
+[00:14:43.745] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:17:46.252] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:18:18.390] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:18:23.516] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:18:25.378] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:18:38.919] Server  LOG     prisma:error "违反了 UNIQUE KEY 约束“Caregiver_idCardNumber_key”。不能在对象“dbo.Caregiver”中插入重复键。重复键值为 (320501200511027550)。"
+[00:18:38.926] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:162:148\n\n  159 }\n  160 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;\n  161 try {\n→ 162     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create(\nUnique constraint failed on the (not available)"
+[00:18:39.179] Server  ERROR   Failed to create caregiver: PrismaClientKnownRequestError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:162:148
+
+  159 }
+  160 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+  161 try {
+→ 162     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create(
+Unique constraint failed on the (not available)
+[00:18:41.576] Server  LOG     prisma:error "违反了 UNIQUE KEY 约束“Caregiver_idCardNumber_key”。不能在对象“dbo.Caregiver”中插入重复键。重复键值为 (320501200511027550)。"
+[00:18:41.577] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:162:148\n\n  159 }\n  160 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;\n  161 try {\n→ 162     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create(\nUnique constraint failed on the (not available)"
+[00:18:41.755] Server  ERROR   Failed to create caregiver: PrismaClientKnownRequestError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:162:148
+
+  159 }
+  160 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+  161 try {
+→ 162     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create(
+Unique constraint failed on the (not available)
+[00:19:46.559] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:19:49.340] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:19:50.555] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:21:21.388] Server  LOG     ✓ Compiled in 96ms
+[00:30:41.943] Server  LOG     prisma:error "违反了 UNIQUE KEY 约束“Caregiver_idCardNumber_key”。不能在对象“dbo.Caregiver”中插入重复键。重复键值为 (320501200511027550)。"
+[00:30:41.945] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:164:148\n\n  161 }\n  162 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;\n  163 try {\n→ 164     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create(\nUnique constraint failed on the (not available)"
+[00:30:42.215] Server  ERROR   Failed to create caregiver: PrismaClientKnownRequestError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:164:148
+
+  161 }
+  162 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+  163 try {
+→ 164     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create(
+Unique constraint failed on the (not available)
+[00:31:11.844] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:31:29.493] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:31:53.692] Server  LOG     ✓ Compiled in 678ms
+[00:31:53.803] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:35:35.722] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:35:49.087] Server  WARN    Error: Route "/caregivers/[id]" used `params.id`. `params` is a Promise and must be unwrapped with `await` or `React.use()` before accessing its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+[00:35:49.103] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.findUnique()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:275:166\n\n  272 }\n  273 async function getCaregiver(id) {\n  274     try {\n→ 275         const caregiver = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.findUnique({\n                where: {\n                  idString: undefined,\n              ?   workerId?: String,\n              ?   idCardNumber?: String,\n              ?   AND?: CaregiverWhereInput | CaregiverWhereInput[],\n              ?   OR?: CaregiverWhereInput[],\n              ?   NOT?: CaregiverWhereInput | CaregiverWhereInput[],\n              ?   name?: StringFilter | String,\n              ?   phone?: StringFilter | String,\n              ?   dob?: DateTimeNullableFilter | DateTime | Null,\n              ?   gender?: StringNullableFilter | String | Null,\n              ?   nativePlace?: StringNullableFilter | String | Null,\n              ?   education?: StringNullableFilter | String | Null,\n              ?   workExpLevel?: StringNullableFilter | String | Null,\n              ?   isLiveIn?: StringNullableFilter | String | Null,\n              ?   specialties?: StringNullableFilter | String | Null,\n              ?   cookingSkills?: StringNullableFilter | String | Null,\n              ?   languages?: StringNullableFilter | String | Null,\n              ?   avatarUrl?: StringNullableFilter | String | Null,\n              ?   idCardFrontUrl?: StringNullableFilter | String | Null,\n              ?   idCardBackUrl?: StringNullableFilter | String | Null,\n              ?   notes?: StringNullableFilter | String | Null,\n              ?   status?: StringFilter | String,\n              ?   level?: StringFilter | String,\n              ?   createdAt?: DateTimeFilter | DateTime,\n              ?   updatedAt?: DateTimeFilter | DateTime\n                }\n              })\n\nArgument `where` of type CaregiverWhereUniqueInput needs at least one of `idString`, `workerId` or `idCardNumber` arguments. Available options are marked with ?."
+[00:35:49.107] Server  ERROR   Failed to fetch caregiver: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.findUnique()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:275:166
+
+  272 }
+  273 async function getCaregiver(id) {
+  274     try {
+→ 275         const caregiver = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.findUnique({
+                where: {
+                  idString: undefined,
+              ?   workerId?: String,
+              ?   idCardNumber?: String,
+              ?   AND?: CaregiverWhereInput | CaregiverWhereInput[],
+              ?   OR?: CaregiverWhereInput[],
+              ?   NOT?: CaregiverWhereInput | CaregiverWhereInput[],
+              ?   name?: StringFilter | String,
+              ?   phone?: StringFilter | String,
+              ?   dob?: DateTimeNullableFilter | DateTime | Null,
+              ?   gender?: StringNullableFilter | String | Null,
+              ?   nativePlace?: StringNullableFilter | String | Null,
+              ?   education?: StringNullableFilter | String | Null,
+              ?   workExpLevel?: StringNullableFilter | String | Null,
+              ?   isLiveIn?: StringNullableFilter | String | Null,
+              ?   specialties?: StringNullableFilter | String | Null,
+              ?   cookingSkills?: StringNullableFilter | String | Null,
+              ?   languages?: StringNullableFilter | String | Null,
+              ?   avatarUrl?: StringNullableFilter | String | Null,
+              ?   idCardFrontUrl?: StringNullableFilter | String | Null,
+              ?   idCardBackUrl?: StringNullableFilter | String | Null,
+              ?   notes?: StringNullableFilter | String | Null,
+              ?   status?: StringFilter | String,
+              ?   level?: StringFilter | String,
+              ?   createdAt?: DateTimeFilter | DateTime,
+              ?   updatedAt?: DateTimeFilter | DateTime
+                }
+              })
+
+Argument `where` of type CaregiverWhereUniqueInput needs at least one of `idString`, `workerId` or `idCardNumber` arguments. Available options are marked with ?.
+[00:38:33.143] Server  LOG     prisma:error "违反了 UNIQUE KEY 约束“Caregiver_idCardNumber_key”。不能在对象“dbo.Caregiver”中插入重复键。重复键值为 (320501200511027552)。"
+[00:38:33.145] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:166:148\n\n  163 }\n  164 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;\n  165 try {\n→ 166     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create(\nUnique constraint failed on the (not available)"
+[00:38:33.376] Server  ERROR   Failed to create caregiver: PrismaClientKnownRequestError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:166:148
+
+  163 }
+  164 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+  165 try {
+→ 166     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create(
+Unique constraint failed on the (not available)
+[00:54:10.299] Server  LOG     ✓ Compiled in 43ms
+[00:57:04.175] Server  LOG     prisma:error "违反了 UNIQUE KEY 约束“Caregiver_idCardNumber_key”。不能在对象“dbo.Caregiver”中插入重复键。重复键值为 (320501200511027552)。"
+[00:57:04.176] Server  LOG     prisma:error "\nInvalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create()` invocation in\nD:\\housekeeping-service\\.next\\dev\\server\\chunks\\ssr\\_c16686d8._.js:166:148\n\n  163 }\n  164 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;\n  165 try {\n→ 166     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__[\"db\"].caregiver.create(\nUnique constraint failed on the (not available)"
+[00:57:04.360] Server  ERROR   Failed to create caregiver: PrismaClientKnownRequestError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create()` invocation in
+D:\housekeeping-service\.next\dev\server\chunks\ssr\_c16686d8._.js:166:148
+
+  163 }
+  164 const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+  165 try {
+→ 166     await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create(
+Unique constraint failed on the (not available)

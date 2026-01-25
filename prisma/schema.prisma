@@ -1,0 +1,44 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "sqlserver"
+  url       = env("DATABASE_URL")
+}
+
+// === 下面是你定义的模型 ===
+
+model Caregiver {
+  idString      String   @id @default(cuid())
+  workerId      String   @unique
+  name          String
+  phone         String
+  idCardNumber  String   @unique
+  dob           DateTime?
+  gender        String?
+  nativePlace   String?
+  education     String?
+
+  // Professional Info
+  workExpLevel  String?
+  isLiveIn      String?
+  specialties   String? @db.NVarChar(Max)
+  cookingSkills String? @db.NVarChar(Max)
+  languages     String? @db.NVarChar(Max)
+
+  // Files
+  avatarUrl      String?
+  idCardFrontUrl String?
+  idCardBackUrl  String?
+
+  notes          String?
+
+  // System Fields
+  status    String   @default("PENDING")
+  level     String   @default("TRAINEE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

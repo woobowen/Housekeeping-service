@@ -54,6 +54,13 @@ export const caregiverFormSchema = z.object({
   avatarUrl: z.string().url('无效的头像链接').optional().or(z.literal('')),
   idCardFrontUrl: z.string().url('无效的身份证正面链接').optional().or(z.literal('')),
   idCardBackUrl: z.string().url('无效的身份证背面链接').optional().or(z.literal('')),
+
+  // --- Step 4: Metadata (Extensibility) ---
+  metadata: z.object({
+    rating: z.coerce.number().min(0).max(5).optional(),
+    internalNotes: z.string().optional(),
+    customTags: z.array(z.string()).optional(),
+  }).optional(),
 });
 
 // -----------------------------------------------------------------------------
@@ -84,4 +91,9 @@ export const defaultCaregiverValues: Partial<CaregiverFormValues> = {
   idCardFrontUrl: '',
   idCardBackUrl: '',
   notes: '',
+  metadata: {
+    rating: 0,
+    internalNotes: '',
+    customTags: [],
+  },
 };

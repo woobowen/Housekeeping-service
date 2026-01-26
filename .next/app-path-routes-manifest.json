@@ -1,0 +1,10 @@
+{
+  "/(dashboard)/caregivers/[id]/edit/page": "/caregivers/[id]/edit",
+  "/(dashboard)/caregivers/[id]/page": "/caregivers/[id]",
+  "/(dashboard)/caregivers/new/page": "/caregivers/new",
+  "/(dashboard)/caregivers/page": "/caregivers",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/favicon.ico/route": "/favicon.ico",
+  "/page": "/"
+}

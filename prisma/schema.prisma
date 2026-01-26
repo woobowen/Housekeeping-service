@@ -35,6 +35,7 @@ model Caregiver {
   idCardBackUrl  String?
 
   notes          String?
+  metadata       String? @db.NVarChar(Max)
 
   // System Fields
   status    String   @default("PENDING")

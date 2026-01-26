@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { DeleteCaregiverButton } from '@/components/caregiver-delete-button';
 import { 
   ArrowLeft, 
   Phone, 
@@ -13,9 +14,11 @@ import {
   Briefcase, 
   Calendar, 
   User,
-  FileText
+  FileText,
+  Star
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { CaregiverMetadata } from '../types';
 
 // Define the shape of the parsed caregiver data
 // This should match the return type of getCaregiver in actions.ts
@@ -37,6 +40,7 @@ interface CaregiverDetailProps {
     languages: string[];
     avatarUrl: string | null;
     notes: string | null;
+    metadata: CaregiverMetadata;
     status: string;
     level: string;
     createdAt: Date;
@@ -61,6 +65,7 @@ export function CaregiverDetail({ data }: CaregiverDetailProps) {
                编辑信息
              </Link>
            </Button>
+           <DeleteCaregiverButton id={data.idString} />
         </div>
       </div>
 
@@ -204,6 +209,59 @@ export function CaregiverDetail({ data }: CaregiverDetailProps) {
              <CardContent>
                <p className="text-sm whitespace-pre-wrap">{data.notes || '暂无备注'}</p>
              </CardContent>
+          </Card>
+
+          {/* Internal Management (Metadata) */}
+          <Card className="border-yellow-200 bg-yellow-50/50">
+            <CardHeader>
+              <CardTitle className="flex items-center text-yellow-800">
+                <Star className="mr-2 h-5 w-5 fill-yellow-500 text-yellow-500" /> 内部管理
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="flex items-center justify-between">
+                 <span className="text-sm font-medium text-muted-foreground">综合评分</span>
+                 <div className="flex items-center gap-1">
+                   {Array.from({ length: 5 }).map((_, i) => (
+                     <Star 
+                       key={i} 
+                       className={`h-4 w-4 ${i < (data.metadata?.rating || 0) ? "fill-yellow-500 text-yellow-500" : "text-gray-300"}`} 
+                     />
+                   ))}
+                   <span className="ml-2 text-sm font-medium">{data.metadata?.rating || 0} / 5</span>
+                 </div>
+               </div>
+               
+               <Separator className="bg-yellow-200" />
+
+               <div className="space-y-2">
+                 <span className="text-sm font-medium text-muted-foreground">自定义标签</span>
+                 <div className="flex flex-wrap gap-2">
+                   {data.metadata?.customTags && data.metadata.customTags.length > 0 ? (
+                     data.metadata.customTags.map((tag, i) => (
+                       <Badge key={i} variant="outline" className="border-yellow-500 text-yellow-700 bg-yellow-100">
+                         {tag}
+                       </Badge>
+                     ))
+                   ) : (
+                     <span className="text-sm text-muted-foreground">无标签</span>
+                   )}
+                 </div>
+               </div>
+
+               <Separator className="bg-yellow-200" />
+
+               <div className="space-y-2">
+                 <span className="text-sm font-medium text-muted-foreground">内部备注</span>
+                 <div className="p-3 rounded-md bg-yellow-100/50 text-sm text-yellow-900 border border-yellow-100">
+                    {data.metadata?.internalNotes ? (
+                      <p className="whitespace-pre-wrap">{data.metadata.internalNotes}</p>
+                    ) : (
+                      <span className="text-muted-foreground italic">暂无内部备注</span>
+                    )}
+                 </div>
+               </div>
+            </CardContent>
           </Card>
         </div>
       </div>

@@ -106,7 +106,13 @@ const caregiverFormSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node
     // --- Step 3: Files ---
     avatarUrl: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().url('无效的头像链接').optional().or(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].literal('')),
     idCardFrontUrl: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().url('无效的身份证正面链接').optional().or(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].literal('')),
-    idCardBackUrl: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().url('无效的身份证背面链接').optional().or(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].literal(''))
+    idCardBackUrl: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().url('无效的身份证背面链接').optional().or(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].literal('')),
+    // --- Step 4: Metadata (Extensibility) ---
+    metadata: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
+        rating: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].coerce.number().min(0).max(5).optional(),
+        internalNotes: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().optional(),
+        customTags: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].array(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string()).optional()
+    }).optional()
 });
 const defaultCaregiverValues = {
     workerId: '',
@@ -125,15 +131,22 @@ const defaultCaregiverValues = {
     avatarUrl: '',
     idCardFrontUrl: '',
     idCardBackUrl: '',
-    notes: ''
+    notes: '',
+    metadata: {
+        rating: 0,
+        internalNotes: '',
+        customTags: []
+    }
 };
 }),
 "[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)", ((__turbopack_context__) => {
 "use strict";
 
-/* __next_internal_action_entry_do_not_use__ [{"00e0042958643f2757eadb780288700c8d9574de6f":"getCaregivers","404c24dbfb8a4607adee53ef66000fa159d3ed73c3":"getCaregiver","40799a5a3ff51764feef7f79b0f477de03b7dc9688":"createCaregiver","60f2087def6e304318ecca0e214f4b7115cfb60c28":"updateCaregiver"},"",""] */ __turbopack_context__.s([
+/* __next_internal_action_entry_do_not_use__ [{"00e0042958643f2757eadb780288700c8d9574de6f":"getCaregivers","4040e44bd2a869964392d7dfe3e4634d81bd3225ac":"deleteCaregiver","404c24dbfb8a4607adee53ef66000fa159d3ed73c3":"getCaregiver","40799a5a3ff51764feef7f79b0f477de03b7dc9688":"createCaregiver","60f2087def6e304318ecca0e214f4b7115cfb60c28":"updateCaregiver"},"",""] */ __turbopack_context__.s([
     "createCaregiver",
     ()=>createCaregiver,
+    "deleteCaregiver",
+    ()=>deleteCaregiver,
     "getCaregiver",
     ()=>getCaregiver,
     "getCaregivers",
@@ -143,10 +156,13 @@ const defaultCaregiverValues = {
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/build/webpack/loaders/next-flight-loader/server-reference.js [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/cache.js [app-rsc] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$api$2f$navigation$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/next/dist/api/navigation.react-server.js [app-rsc] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$components$2f$navigation$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/client/components/navigation.react-server.js [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/lib/prisma.ts [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregivers$2f$schema$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/features/caregivers/schema.ts [app-rsc] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$externals$5d2f40$prisma$2f$client__$5b$external$5d$__$2840$prisma$2f$client$2c$__cjs$2c$__$5b$project$5d2f$node_modules$2f40$prisma$2f$client$29$__ = __turbopack_context__.i("[externals]/@prisma/client [external] (@prisma/client, cjs, [project]/node_modules/@prisma/client)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/build/webpack/loaders/next-flight-loader/action-validate.js [app-rsc] (ecmascript)");
+;
 ;
 ;
 ;
@@ -161,7 +177,7 @@ async function createCaregiver(data) {
             message: '表单验证失败，请检查输入'
         };
     }
-    const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+    const { specialties, cookingSkills, languages, metadata, ...otherData } = validatedFields.data;
     try {
         await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.create({
             data: {
@@ -169,6 +185,7 @@ async function createCaregiver(data) {
                 specialties: JSON.stringify(specialties),
                 cookingSkills: JSON.stringify(cookingSkills),
                 languages: JSON.stringify(languages),
+                metadata: metadata ? JSON.stringify(metadata) : null,
                 // 默认状态，如果在 Schema 中没有定义，可以在这里指定
                 status: 'PENDING',
                 level: 'TRAINEE'
@@ -205,7 +222,7 @@ async function updateCaregiver(id, data) {
             message: '表单验证失败，请检查输入'
         };
     }
-    const { specialties, cookingSkills, languages, ...otherData } = validatedFields.data;
+    const { specialties, cookingSkills, languages, metadata, ...otherData } = validatedFields.data;
     try {
         await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.update({
             where: {
@@ -215,15 +232,12 @@ async function updateCaregiver(id, data) {
                 ...otherData,
                 specialties: JSON.stringify(specialties),
                 cookingSkills: JSON.stringify(cookingSkills),
-                languages: JSON.stringify(languages)
+                languages: JSON.stringify(languages),
+                metadata: metadata ? JSON.stringify(metadata) : null
             }
         });
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["revalidatePath"])('/caregivers');
         (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["revalidatePath"])(`/caregivers/${id}`);
-        return {
-            success: true,
-            message: '护理员信息更新成功'
-        };
     } catch (error) {
         console.error('Failed to update caregiver:', error);
         if (error instanceof __TURBOPACK__imported__module__$5b$externals$5d2f40$prisma$2f$client__$5b$external$5d$__$2840$prisma$2f$client$2c$__cjs$2c$__$5b$project$5d2f$node_modules$2f40$prisma$2f$client$29$__["Prisma"].PrismaClientKnownRequestError) {
@@ -239,6 +253,7 @@ async function updateCaregiver(id, data) {
             message: '更新失败，请稍后重试'
         };
     }
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$components$2f$navigation$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["redirect"])(`/caregivers/${id}`);
 }
 async function getCaregivers() {
     try {
@@ -249,20 +264,23 @@ async function getCaregivers() {
         });
         return caregivers.map((caregiver)=>{
             // Helper to safely parse JSON
-            const safeParse = (jsonString)=>{
-                if (!jsonString) return [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const safeParse = (jsonString, defaultValue)=>{
+                if (!jsonString) return defaultValue;
                 try {
                     return JSON.parse(jsonString);
                 } catch (e) {
                     console.error(`Failed to parse JSON for caregiver ${caregiver.idString}:`, e);
-                    return [];
+                    return defaultValue;
                 }
             };
             return {
                 ...caregiver,
-                specialties: safeParse(caregiver.specialties),
-                cookingSkills: safeParse(caregiver.cookingSkills),
-                languages: safeParse(caregiver.languages)
+                specialties: safeParse(caregiver.specialties, []),
+                cookingSkills: safeParse(caregiver.cookingSkills, []),
+                languages: safeParse(caregiver.languages, []),
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                metadata: safeParse(caregiver.metadata, {})
             };
         });
     } catch (error) {
@@ -279,43 +297,66 @@ async function getCaregiver(id) {
         });
         if (!caregiver) return null;
         // Helper to safely parse JSON
-        const safeParse = (jsonString)=>{
-            if (!jsonString) return [];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const safeParse = (jsonString, defaultValue)=>{
+            if (!jsonString) return defaultValue;
             try {
                 return JSON.parse(jsonString);
             } catch (e) {
                 console.error(`Failed to parse JSON for caregiver ${caregiver.idString}:`, e);
-                return [];
+                return defaultValue;
             }
         };
         return {
             ...caregiver,
-            specialties: safeParse(caregiver.specialties),
-            cookingSkills: safeParse(caregiver.cookingSkills),
-            languages: safeParse(caregiver.languages)
+            specialties: safeParse(caregiver.specialties, []),
+            cookingSkills: safeParse(caregiver.cookingSkills, []),
+            languages: safeParse(caregiver.languages, []),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            metadata: safeParse(caregiver.metadata, {})
         };
     } catch (error) {
         console.error('Failed to fetch caregiver:', error);
         return null;
     }
 }
+async function deleteCaregiver(id) {
+    try {
+        await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["db"].caregiver.delete({
+            where: {
+                idString: id
+            }
+        });
+        (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$cache$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["revalidatePath"])('/caregivers');
+    } catch (error) {
+        console.error('Failed to delete caregiver:', error);
+        return {
+            success: false,
+            message: '删除护理员失败，请稍后重试'
+        };
+    }
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$components$2f$navigation$2e$react$2d$server$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["redirect"])('/caregivers');
+}
 ;
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$action$2d$validate$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["ensureServerEntryExports"])([
     createCaregiver,
     updateCaregiver,
     getCaregivers,
-    getCaregiver
+    getCaregiver,
+    deleteCaregiver
 ]);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(createCaregiver, "40799a5a3ff51764feef7f79b0f477de03b7dc9688", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(updateCaregiver, "60f2087def6e304318ecca0e214f4b7115cfb60c28", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(getCaregivers, "00e0042958643f2757eadb780288700c8d9574de6f", null);
 (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(getCaregiver, "404c24dbfb8a4607adee53ef66000fa159d3ed73c3", null);
+(0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$build$2f$webpack$2f$loaders$2f$next$2d$flight$2d$loader$2f$server$2d$reference$2e$js__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["registerServerReference"])(deleteCaregiver, "4040e44bd2a869964392d7dfe3e4634d81bd3225ac", null);
 }),
 "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript) <locals>", ((__turbopack_context__) => {
 "use strict";
 
 __turbopack_context__.s([]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregivers$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)");
+;
 ;
 ;
 ;
@@ -327,6 +368,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregiver
 __turbopack_context__.s([
     "00e0042958643f2757eadb780288700c8d9574de6f",
     ()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregivers$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getCaregivers"],
+    "4040e44bd2a869964392d7dfe3e4634d81bd3225ac",
+    ()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregivers$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["deleteCaregiver"],
     "404c24dbfb8a4607adee53ef66000fa159d3ed73c3",
     ()=>__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$features$2f$caregivers$2f$actions$2e$ts__$5b$app$2d$rsc$5d$__$28$ecmascript$29$__["getCaregiver"],
     "40799a5a3ff51764feef7f79b0f477de03b7dc9688",

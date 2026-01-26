@@ -15,6 +15,21 @@
       "exportedName": "getCaregivers",
       "filename": "src/features/caregivers/actions.ts"
     },
+    "4040e44bd2a869964392d7dfe3e4634d81bd3225ac": {
+      "workers": {
+        "app/(dashboard)/caregivers/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "deleteCaregiver",
+          "filename": "src/features/caregivers/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/caregivers/page": "rsc"
+      },
+      "exportedName": "deleteCaregiver",
+      "filename": "src/features/caregivers/actions.ts"
+    },
     "404c24dbfb8a4607adee53ef66000fa159d3ed73c3": {
       "workers": {
         "app/(dashboard)/caregivers/page": {

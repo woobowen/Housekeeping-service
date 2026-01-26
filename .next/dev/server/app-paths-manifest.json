@@ -1,7 +1,4 @@
 {
   "/(dashboard)/caregivers/[id]/edit/page": "app/(dashboard)/caregivers/[id]/edit/page.js",
-  "/(dashboard)/caregivers/[id]/page": "app/(dashboard)/caregivers/[id]/page.js",
-  "/(dashboard)/caregivers/new/page": "app/(dashboard)/caregivers/new/page.js",
-  "/(dashboard)/caregivers/page": "app/(dashboard)/caregivers/page.js",
-  "/_not-found/page": "app/_not-found/page.js"
+  "/(dashboard)/caregivers/[id]/page": "app/(dashboard)/caregivers/[id]/page.js"
 }

@@ -59,6 +59,7 @@ const STEPS = [
   { id: 'basic', title: '基本信息' },
   { id: 'professional', title: '专业技能' },
   { id: 'files', title: '证件上传' },
+  { id: 'metadata', title: '内部管理' },
 ];
 
 const SPECIALTIES_OPTIONS = ["做饭", "保洁", "育儿", "英语", "陪护", "驾驶", "收纳"];
@@ -93,40 +94,63 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
   const form = useForm<CaregiverFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(caregiverFormSchema) as any,
-    defaultValues: initialData || defaultCaregiverValues as CaregiverFormValues,
+    defaultValues: {
+      ...defaultCaregiverValues,
+      ...initialData,
+      metadata: {
+        rating: initialData?.metadata?.rating ?? 0,
+        internalNotes: initialData?.metadata?.internalNotes ?? '',
+        customTags: initialData?.metadata?.customTags ?? [],
+      },
+    } as CaregiverFormValues,
     mode: 'onChange',
   });
 
   const { trigger } = form;
 
   // Handle Next Step with Validation
-  const handleNext = async () => {
+  const handleNext = async (e: React.MouseEvent) => {
+    e.preventDefault();
     let fieldsToValidate: (keyof CaregiverFormValues)[] = [];
 
-    if (currentStep === 0) {
-      fieldsToValidate = [
-        'workerId',
-        'name',
-        'phone',
-        'idCardNumber',
-        'dob',
-        'gender',
-        'nativePlace',
-        'education',
-        'notes',
-      ];
-    } else if (currentStep === 1) {
-      fieldsToValidate = [
-        'workExpLevel',
-        'isLiveIn',
-        'specialties',
-      ];
+    switch (currentStep) {
+      case 0:
+        fieldsToValidate = [
+          'workerId',
+          'name',
+          'phone',
+          'idCardNumber',
+          'dob',
+          'gender',
+          'nativePlace',
+          'education',
+          'notes',
+        ];
+        break;
+      case 1:
+        fieldsToValidate = [
+          'workExpLevel',
+          'isLiveIn',
+          'specialties',
+        ];
+        break;
+      case 2:
+        fieldsToValidate = [
+          'avatarUrl',
+          'idCardFrontUrl',
+          'idCardBackUrl',
+        ];
+        break;
+      // Step 3 (Metadata) is last, validation happens on submit usually, 
+      // but if we had more steps, we'd add case 3 here.
     }
 
     const isStepValid = await trigger(fieldsToValidate);
 
     if (isStepValid) {
-      setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+      if (currentStep < STEPS.length - 1) {
+        setCurrentStep((prev) => prev + 1);
+      }
     }
   };
 
@@ -135,21 +159,42 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
   };
 
   const onSubmit = (data: CaregiverFormValues) => {
-    startTransition(async () => {
-      let result;
-      
-      if (isEdit && initialData) {
-        result = await updateCaregiver(initialData.idString, data);
-      } else {
-        result = await createCaregiver(data);
-      }
+    // Safeguard: Prevent submission if not on the last step
+    // This handles cases like implicit submission via Enter key
+    if (currentStep < STEPS.length - 1) {
+      return;
+    }
 
-      if (result.success) {
-        toast.success(result.message);
-        router.push('/caregivers'); 
-        router.refresh();
-      } else {
-        toast.error(result.message || '操作失败');
+    startTransition(async () => {
+      try {
+        if (isEdit && initialData) {
+          const result = await updateCaregiver(initialData.idString, data);
+          // If updateCaregiver succeeds, it redirects, so this line is only reached on error (if it returns)
+          // or if the redirect hasn't happened yet (but it throws).
+          // If it returns, it must be an error object.
+          if (result && !result.success) {
+            toast.error(result.message);
+          } else {
+            // Should not happen if successful redirect, but just in case
+            toast.success('更新成功');
+          }
+        } else {
+          const result = await createCaregiver(data);
+          if (result.success) {
+            toast.success(result.message);
+            router.push('/caregivers'); 
+            router.refresh();
+          } else {
+            toast.error(result.message || '操作失败');
+          }
+        }
+      } catch (error) {
+        // Next.js redirects might throw an error. We usually don't want to catch it 
+        // effectively unless we rethrow, but here we are in a void function (event handler).
+        // However, usually Server Action invocations handle redirects gracefully.
+        // If we catch it, we might prevent the redirect?
+        // Let's rely on standard behavior.
+        console.error("Submit error:", error);
       }
     });
   };
@@ -165,7 +210,15 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
       
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form 
+            onSubmit={form.handleSubmit(onSubmit)} 
+            className="space-y-6"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.target instanceof HTMLInputElement && currentStep < STEPS.length - 1) {
+                e.preventDefault();
+              }
+            }}
+          >
             
             {/* --- Step 1: Basic Info --- */}
             <div className={cn(currentStep === 0 ? "block" : "hidden", "space-y-4")}>
@@ -251,7 +304,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>性别</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="选择性别" />
@@ -290,7 +343,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>学历</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="选择学历" />
@@ -338,7 +391,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>工作经验等级</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="选择经验等级" />
@@ -363,7 +416,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>住家情况</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="选择住家情况" />
@@ -483,8 +536,100 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
               </div>
             </div>
 
+            {/* --- Step 4: Metadata (Internal Management) --- */}
+            <div className={cn(currentStep === 3 ? "block" : "hidden", "space-y-4")}>
+               <div className="grid gap-4 md:grid-cols-2">
+                 <FormField
+                   control={form.control}
+                   name="metadata.rating"
+                   render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>评分 (1-5)</FormLabel>
+                       <FormControl>
+                         <Input
+                           type="text"              // CHANGE: Use text to stop browser interference
+                           inputMode="decimal"      // HINT: Shows numeric keypad on mobile
+                           placeholder="0-5"
+                           {...field}
+                           // 1. Display Logic: Convert undefined/0 to string, handle empty case
+                           value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                           onChange={(e) => {
+                             const rawValue = e.target.value;
+
+                             // 2. Allow clearing the input completely
+                             if (rawValue === '') {
+                               field.onChange(undefined);
+                               return;
+                             }
+
+                             // 3. Regex Validation: Only allow digits and one decimal point
+                             // Matches: "1", "1.", "1.5"
+                             if (/^\d*\.?\d*$/.test(rawValue)) {
+                                 // Prevent values > 5 manually since type="text" ignores max attribute
+                                 const num = parseFloat(rawValue);
+                                 if (!isNaN(num) && num <= 5) {
+                                    field.onChange(num);
+                                 } else if (isNaN(num)) {
+                                    // Handle edge case like "."
+                                    field.onChange(undefined);
+                                 }
+                             }
+                           }}
+                         />
+                       </FormControl>
+                       <FormMessage />
+                     </FormItem>
+                   )}
+                 />
+
+                 <FormField
+                   control={form.control}
+                   name="metadata.customTags"
+                   render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>自定义标签 (逗号分隔)</FormLabel>
+                       <FormControl>
+                         <Input 
+                           placeholder="例如: VIP, 加急, 夜班" 
+                           value={(field.value || []).join(', ')}
+                           onChange={(e) => {
+                             const value = e.target.value;
+                             // Convert comma-separated string to array
+                             const tags = value.split(/[,，]/).map(t => t.trim()).filter(Boolean);
+                             field.onChange(tags);
+                           }} 
+                         />
+                       </FormControl>
+                       <FormDescription>输入标签后用逗号分隔</FormDescription>
+                       <FormMessage />
+                     </FormItem>
+                   )}
+                 />
+               </div>
+
+               <FormField
+                 control={form.control}
+                 name="metadata.internalNotes"
+                 render={({ field }) => (
+                   <FormItem>
+                     <FormLabel>内部备注</FormLabel>
+                     <FormControl>
+                       <Textarea
+                         placeholder="仅管理员可见的备注信息..."
+                         className="min-h-[100px]"
+                         {...field}
+                         value={field.value ?? ''}
+                       />
+                     </FormControl>
+                     <FormMessage />
+                   </FormItem>
+                 )}
+               />
+            </div>
+
             {/* --- Navigation Buttons --- */}
-            <div className="flex justify-between pt-6 border-t">
+            <div className="flex justify-end gap-4 pt-6 border-t">
+              {/* Back Button */}
               <Button
                 type="button"
                 variant="outline"
@@ -495,14 +640,17 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                 上一步
               </Button>
 
-              {currentStep < STEPS.length - 1 ? (
-                <Button type="button" onClick={handleNext}>
-                  下一步
-                </Button>
-              ) : (
+              {/* Logic Split: Explicitly separate Next and Submit buttons */}
+              {currentStep === STEPS.length - 1 ? (
+                // === SUBMIT BUTTON ===
                 <Button type="submit" disabled={isPending}>
                   {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isPending ? '提交中...' : (isEdit ? '保存修改' : '提交')}
+                </Button>
+              ) : (
+                // === NEXT BUTTON ===
+                <Button type="button" onClick={handleNext}>
+                  下一步
                 </Button>
               )}
             </div>

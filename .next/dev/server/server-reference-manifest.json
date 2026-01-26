@@ -1,5 +1,71 @@
 {
   "node": {
+    "00e0042958643f2757eadb780288700c8d9574de6f": {
+      "workers": {
+        "app/(dashboard)/caregivers/[id]/edit/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/edit/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getCaregivers",
+          "filename": "src/features/caregivers/actions.ts"
+        },
+        "app/(dashboard)/caregivers/[id]/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getCaregivers",
+          "filename": "src/features/caregivers/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/caregivers/[id]/edit/page": "rsc",
+        "app/(dashboard)/caregivers/[id]/page": "rsc"
+      },
+      "filename": "src/features/caregivers/actions.ts",
+      "exportedName": "getCaregivers"
+    },
+    "4040e44bd2a869964392d7dfe3e4634d81bd3225ac": {
+      "workers": {
+        "app/(dashboard)/caregivers/[id]/edit/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/edit/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "deleteCaregiver",
+          "filename": "src/features/caregivers/actions.ts"
+        },
+        "app/(dashboard)/caregivers/[id]/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "deleteCaregiver",
+          "filename": "src/features/caregivers/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/caregivers/[id]/edit/page": "rsc",
+        "app/(dashboard)/caregivers/[id]/page": "action-browser"
+      },
+      "filename": "src/features/caregivers/actions.ts",
+      "exportedName": "deleteCaregiver"
+    },
+    "404c24dbfb8a4607adee53ef66000fa159d3ed73c3": {
+      "workers": {
+        "app/(dashboard)/caregivers/[id]/edit/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/edit/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getCaregiver",
+          "filename": "src/features/caregivers/actions.ts"
+        },
+        "app/(dashboard)/caregivers/[id]/page": {
+          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false,
+          "exportedName": "getCaregiver",
+          "filename": "src/features/caregivers/actions.ts"
+        }
+      },
+      "layer": {
+        "app/(dashboard)/caregivers/[id]/edit/page": "rsc",
+        "app/(dashboard)/caregivers/[id]/page": "rsc"
+      },
+      "filename": "src/features/caregivers/actions.ts",
+      "exportedName": "getCaregiver"
+    },
     "40799a5a3ff51764feef7f79b0f477de03b7dc9688": {
       "workers": {
         "app/(dashboard)/caregivers/[id]/edit/page": {
@@ -13,25 +79,11 @@
           "async": false,
           "exportedName": "createCaregiver",
           "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/new/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "createCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "createCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
         }
       },
       "layer": {
         "app/(dashboard)/caregivers/[id]/edit/page": "action-browser",
-        "app/(dashboard)/caregivers/[id]/page": "rsc",
-        "app/(dashboard)/caregivers/new/page": "action-browser",
-        "app/(dashboard)/caregivers/page": "rsc"
+        "app/(dashboard)/caregivers/[id]/page": "rsc"
       },
       "filename": "src/features/caregivers/actions.ts",
       "exportedName": "createCaregiver"
@@ -49,86 +101,14 @@
           "async": false,
           "exportedName": "updateCaregiver",
           "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/new/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/new/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "updateCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "updateCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
         }
       },
       "layer": {
         "app/(dashboard)/caregivers/[id]/edit/page": "action-browser",
-        "app/(dashboard)/caregivers/[id]/page": "rsc",
-        "app/(dashboard)/caregivers/new/page": "action-browser",
-        "app/(dashboard)/caregivers/page": "rsc"
+        "app/(dashboard)/caregivers/[id]/page": "rsc"
       },
       "filename": "src/features/caregivers/actions.ts",
       "exportedName": "updateCaregiver"
-    },
-    "00e0042958643f2757eadb780288700c8d9574de6f": {
-      "workers": {
-        "app/(dashboard)/caregivers/[id]/edit/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/edit/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregivers",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/[id]/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregivers",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregivers",
-          "filename": "src/features/caregivers/actions.ts"
-        }
-      },
-      "layer": {
-        "app/(dashboard)/caregivers/[id]/edit/page": "rsc",
-        "app/(dashboard)/caregivers/[id]/page": "rsc",
-        "app/(dashboard)/caregivers/page": "rsc"
-      },
-      "filename": "src/features/caregivers/actions.ts",
-      "exportedName": "getCaregivers"
-    },
-    "404c24dbfb8a4607adee53ef66000fa159d3ed73c3": {
-      "workers": {
-        "app/(dashboard)/caregivers/[id]/edit/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/edit/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/[id]/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/[id]/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
-        },
-        "app/(dashboard)/caregivers/page": {
-          "moduleId": "[project]/.next-internal/server/app/(dashboard)/caregivers/page/actions.js { ACTIONS_MODULE0 => \"[project]/src/features/caregivers/actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
-          "async": false,
-          "exportedName": "getCaregiver",
-          "filename": "src/features/caregivers/actions.ts"
-        }
-      },
-      "layer": {
-        "app/(dashboard)/caregivers/[id]/edit/page": "rsc",
-        "app/(dashboard)/caregivers/[id]/page": "rsc",
-        "app/(dashboard)/caregivers/page": "rsc"
-      },
-      "filename": "src/features/caregivers/actions.ts",
-      "exportedName": "getCaregiver"
     }
   },
   "edge": {},

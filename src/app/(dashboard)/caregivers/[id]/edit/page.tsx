@@ -3,6 +3,8 @@ import { getCaregiver } from '@/features/caregivers/actions';
 import { CaregiverForm } from '@/features/caregivers/components/caregiver-form';
 import { CaregiverFormValues } from '@/features/caregivers/schema';
 
+export const dynamic = 'force-dynamic';
+
 interface PageProps {
   params: Promise<{
     id: string;
@@ -19,7 +21,7 @@ export default async function EditCaregiverPage(props: PageProps) {
 
   // Transform db result to form values
   // getCaregiver already parses JSON strings to arrays, so we just need to ensure types match
-  const initialData: CaregiverFormValues & { idString: string } = {
+  const initialData: CaregiverFormValues & { idString: string, metadataJson?: string } = {
     idString: caregiver.idString,
     workerId: caregiver.workerId,
     name: caregiver.name,
@@ -38,11 +40,17 @@ export default async function EditCaregiverPage(props: PageProps) {
     idCardFrontUrl: caregiver.idCardFrontUrl || '',
     idCardBackUrl: caregiver.idCardBackUrl || '',
     notes: caregiver.notes || undefined,
+    metadataJson: (caregiver as any).metadataJson, // Pass the JSON string explicitly
   };
 
   return (
     <div className="py-6">
-      <CaregiverForm initialData={initialData} />
+      <CaregiverForm 
+        initialData={initialData}
+        caregiverJson={JSON.stringify(initialData)} 
+        metadataJson={(caregiver as any).metadataJson}
+        key={id + ((caregiver as any).metadataJson || 'loading')} 
+      />
     </div>
   );
 }

@@ -9,18 +9,16 @@ import { MapPin, Phone, GraduationCap, Briefcase } from 'lucide-react';
 // Define the shape of the caregiver data expected by this component
 // This matches the return type of getCaregivers in actions.ts
 interface Caregiver {
-  idString: string;
-  workerId: string;
-  name: string;
+  id: string;
+  fullName: string;
   phone: string;
   status: string;
-  workExpLevel: string | null;
+  yearsExperience: string | null;
   education: string | null;
   nativePlace: string | null;
   specialties: string[];
-  cookingSkills: string[];
-  languages: string[];
-  // Add other fields if necessary
+  level: string;
+  avatarUrl: string | null;
 }
 
 interface CaregiverListProps {
@@ -42,10 +40,10 @@ export function CaregiverList({ data }: CaregiverListProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {data.map((caregiver) => (
-        <Card key={caregiver.idString} className="flex flex-col">
+        <Card key={caregiver.id} className="flex flex-col">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-lg font-bold">
-              {caregiver.name}
+              {caregiver.fullName}
             </CardTitle>
             <Badge variant={getStatusVariant(caregiver.status)}>
               {getStatusLabel(caregiver.status)}
@@ -59,7 +57,7 @@ export function CaregiverList({ data }: CaregiverListProps) {
               </div>
               <div className="flex items-center">
                 <Briefcase className="mr-2 h-4 w-4" />
-                经验: {caregiver.workExpLevel || '未设置'}
+                经验: {caregiver.yearsExperience || '未设置'}
               </div>
               {caregiver.nativePlace && (
                 <div className="flex items-center">
@@ -76,12 +74,12 @@ export function CaregiverList({ data }: CaregiverListProps) {
             </div>
 
             <div className="flex flex-wrap gap-1">
-              {caregiver.specialties.slice(0, 5).map((skill, index) => (
+              {(caregiver.specialties || []).slice(0, 5).map((skill, index) => (
                 <Badge key={index} variant="secondary" className="text-xs">
                   {skill}
                 </Badge>
               ))}
-              {caregiver.specialties.length > 5 && (
+              {(caregiver.specialties || []).length > 5 && (
                 <Badge variant="outline" className="text-xs">
                   +{caregiver.specialties.length - 5}
                 </Badge>
@@ -90,7 +88,7 @@ export function CaregiverList({ data }: CaregiverListProps) {
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full" variant="outline">
-              <Link href={`/caregivers/${caregiver.idString}`}>
+              <Link href={`/caregivers/${caregiver.id}`}>
                 查看详情
               </Link>
             </Button>

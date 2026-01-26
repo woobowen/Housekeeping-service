@@ -16,18 +16,23 @@ model Caregiver {
   workerId      String   @unique
   name          String
   phone         String
-  idCardNumber  String   @unique
-  dob           DateTime?
-  gender        String?
+  idCardNumber  String?  @unique
+  birthDate     DateTime?
+  gender        String?  @default("女")
   nativePlace   String?
   education     String?
 
   // Professional Info
-  workExpLevel  String?
-  isLiveIn      String?
+  workExpLevel       String?
+  liveInStatus       String?
+  salaryRequirements Int?
+  
+  // JSON Fields (Stored as String in MSSQL)
+  jobTypes      String? @db.NVarChar(Max)
   specialties   String? @db.NVarChar(Max)
   cookingSkills String? @db.NVarChar(Max)
   languages     String? @db.NVarChar(Max)
+  certificates  String? @db.NVarChar(Max)
 
   // Files
   avatarUrl      String?
@@ -42,4 +47,42 @@ model Caregiver {
   level     String   @default("TRAINEE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
+  orders    Order[]
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  phone     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  orders    Order[]
+}
+
+model Order {
+  id           String   @id @default(cuid())
+  orderNo      String   @unique
+  status       String   // 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'
+  amount       Decimal  @db.Decimal(10, 2)
+  startDate    DateTime
+  endDate      DateTime
+  address      String
+  contactName  String
+  contactPhone String
+  requirements String?  @db.NVarChar(Max)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  clientId     String
+  client       User     @relation(fields: [clientId], references: [id])
+
+  caregiverId  String
+  caregiver    Caregiver @relation(fields: [caregiverId], references: [idString])
+
+  @@index([caregiverId, status])
+  @@index([startDate, endDate])
 }

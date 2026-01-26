@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -35,12 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 
 import { createCaregiver, updateCaregiver } from '../actions';
@@ -83,28 +77,92 @@ const EXPERIENCE_LEVEL_MAP: Record<string, string> = {
 
 interface CaregiverFormProps {
   initialData?: CaregiverFormValues & { idString: string };
+  caregiverJson?: string;
+  metadataJson?: string;
 }
 
-export function CaregiverForm({ initialData }: CaregiverFormProps) {
+export function CaregiverForm({ initialData, caregiverJson, metadataJson }: CaregiverFormProps) {
+  // Parse and hydrate JSON data if available
+  const parsedInitialData = useMemo(() => {
+    // 1. Prioritize caregiverJson (Full Data Tunnel)
+    if (caregiverJson) {
+       try {
+        const data = JSON.parse(caregiverJson);
+        if (data.dob) data.dob = new Date(data.dob);
+        if (data.createdAt) data.createdAt = new Date(data.createdAt);
+        if (data.updatedAt) data.updatedAt = new Date(data.updatedAt);
+        
+        // Inject metadataJson if present separately or within
+        if (metadataJson) {
+           try {
+             data.metadata = JSON.parse(metadataJson);
+           } catch (e) { console.error('Failed to parse metadataJson prop', e); }
+        } else if (data.metadataJson) {
+           try {
+             data.metadata = JSON.parse(data.metadataJson);
+           } catch (e) { console.error('Failed to parse metadataJson from object', e); }
+        }
+
+        return data;
+      } catch (e) {
+        console.error("Failed to parse caregiverJson", e);
+      }
+    }
+    
+    // 2. Fallback to initialData + metadataJson
+    if (initialData) {
+       const data = { ...initialData };
+       if (metadataJson) {
+          try {
+             data.metadata = JSON.parse(metadataJson);
+          } catch(e) { console.error('Failed to parse metadataJson fallback', e); }
+       }
+       return data;
+    }
+
+    return null;
+  }, [caregiverJson, initialData, metadataJson]);
+
+  // Use parsed data as primary source, fallback to initialData
+  const activeData = parsedInitialData || initialData;
+  console.log('Client Active Data:', activeData);
+
   const [currentStep, setCurrentStep] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(activeData?.avatarUrl || null);
   const router = useRouter();
-  const isEdit = !!initialData;
+  const isEdit = !!activeData;
 
   const form = useForm<CaregiverFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(caregiverFormSchema) as any,
     defaultValues: {
       ...defaultCaregiverValues,
-      ...initialData,
+      ...activeData,
       metadata: {
-        rating: initialData?.metadata?.rating ?? 0,
-        internalNotes: initialData?.metadata?.internalNotes ?? '',
-        customTags: initialData?.metadata?.customTags ?? [],
+        rating: activeData?.metadata?.rating ?? 0,
+        internalNotes: activeData?.metadata?.internalNotes ?? '',
+        customTags: activeData?.metadata?.customTags ?? [],
       },
     } as CaregiverFormValues,
     mode: 'onChange',
   });
+
+  useEffect(() => {
+    if (activeData) {
+      form.reset({
+        ...defaultCaregiverValues,
+        ...activeData,
+        metadata: {
+          rating: activeData.metadata?.rating ?? 0,
+          internalNotes: activeData.metadata?.internalNotes ?? '',
+          customTags: activeData.metadata?.customTags ?? [],
+        },
+      });
+      setPreviewUrl(activeData.avatarUrl || null);
+    }
+  }, [activeData, form]);
 
   const { trigger } = form;
 
@@ -136,7 +194,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
         break;
       case 2:
         fieldsToValidate = [
-          'avatarUrl',
+          // 'avatarUrl', // Avatar is now handled by file input state
           'idCardFrontUrl',
           'idCardBackUrl',
         ];
@@ -158,28 +216,78 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+      form.setValue('avatarUrl', url); 
+    }
+  };
+
   const onSubmit = (data: CaregiverFormValues) => {
     // Safeguard: Prevent submission if not on the last step
-    // This handles cases like implicit submission via Enter key
     if (currentStep < STEPS.length - 1) {
       return;
     }
 
     startTransition(async () => {
       try {
+        const formData = new FormData();
+
+        // 1. Basic Fields
+        if (data.workerId) formData.append('workerId', data.workerId);
+        if (data.name) formData.append('name', data.name);
+        if (data.phone) formData.append('phone', data.phone);
+        if (data.idCardNumber) formData.append('idCardNumber', data.idCardNumber);
+        
+        // Date formatting
+        if (data.dob) {
+           const dateStr = data.dob instanceof Date 
+             ? format(data.dob, 'yyyy-MM-dd') 
+             : String(data.dob);
+           formData.append('dob', dateStr);
+        }
+
+        if (data.gender) formData.append('gender', data.gender);
+        if (data.nativePlace) formData.append('nativePlace', data.nativePlace);
+        if (data.education) formData.append('education', data.education);
+        if (data.notes) formData.append('notes', data.notes);
+
+        // 2. Professional Fields
+        if (data.workExpLevel) formData.append('workExpLevel', data.workExpLevel);
+        if (data.isLiveIn) formData.append('isLiveIn', data.isLiveIn);
+        
+        // JSON Arrays
+        formData.append('specialties', JSON.stringify(data.specialties || []));
+
+        // 3. Files
+        if (data.avatarUrl) formData.append('avatarUrl', data.avatarUrl);
+        if (data.idCardFrontUrl) formData.append('idCardFrontUrl', data.idCardFrontUrl);
+        if (data.idCardBackUrl) formData.append('idCardBackUrl', data.idCardBackUrl);
+
+        // Append REAL File object
+        if (selectedFile) {
+          formData.append('avatarFile', selectedFile);
+        }
+
+        // 4. Metadata (JSON)
+        if (data.metadata) {
+          formData.append('metadata', JSON.stringify(data.metadata));
+        }
+
         if (isEdit && initialData) {
-          const result = await updateCaregiver(initialData.idString, data);
-          // If updateCaregiver succeeds, it redirects, so this line is only reached on error (if it returns)
-          // or if the redirect hasn't happened yet (but it throws).
-          // If it returns, it must be an error object.
+          formData.append('idString', initialData.idString);
+          const result = await updateCaregiver(null, formData);
+          
           if (result && !result.success) {
             toast.error(result.message);
           } else {
-            // Should not happen if successful redirect, but just in case
             toast.success('更新成功');
           }
         } else {
-          const result = await createCaregiver(data);
+          const result = await createCaregiver(null, formData);
           if (result.success) {
             toast.success(result.message);
             router.push('/caregivers'); 
@@ -188,13 +296,15 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
             toast.error(result.message || '操作失败');
           }
         }
-      } catch (error) {
-        // Next.js redirects might throw an error. We usually don't want to catch it 
-        // effectively unless we rethrow, but here we are in a void function (event handler).
-        // However, usually Server Action invocations handle redirects gracefully.
-        // If we catch it, we might prevent the redirect?
-        // Let's rely on standard behavior.
+      } catch (error: any) {
+        // Next.js redirects (redirect()) work by throwing a special error.
+        // We must not treat this as a real error in our UI.
+        if (error.message === 'NEXT_REDIRECT' || error.message?.includes('NEXT_REDIRECT')) {
+          return;
+        }
+
         console.error("Submit error:", error);
+        toast.error('提交发生错误');
       }
     });
   };
@@ -495,11 +605,36 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                 name="avatarUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>头像 URL (暂用文本)</FormLabel>
-                    <FormControl>
-                      <Input placeholder="输入图片链接 (Mock)" {...field} />
-                    </FormControl>
-                    <FormDescription>后续将替换为真实文件上传</FormDescription>
+                    <FormLabel>头像上传</FormLabel>
+                    <div className="flex items-center gap-4">
+                      <div className="relative h-20 w-20 overflow-hidden rounded-full border bg-muted">
+                        {previewUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={previewUrl}
+                            alt="Avatar preview"
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                            无图
+                          </div>
+                        )}
+                      </div>
+                      <FormControl>
+                        <Input
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                          disabled={field.disabled}
+                          type="file"
+                          accept="image/*"
+                          onChange={onFileChange}
+                          className="w-full max-w-sm"
+                        />
+                      </FormControl>
+                    </div>
+                    <FormDescription>支持 JPG, PNG, WEBP 格式</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -552,7 +687,8 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                            placeholder="0-5"
                            {...field}
                            // 1. Display Logic: Convert undefined/0 to string, handle empty case
-                           value={field.value === undefined || field.value === null ? '' : String(field.value)}
+                           // Ensure we never pass null/undefined to value to avoid uncontrolled warnings
+                           value={field.value ?? ''}
                            onChange={(e) => {
                              const rawValue = e.target.value;
 

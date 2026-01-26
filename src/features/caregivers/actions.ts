@@ -67,10 +67,25 @@ async function processFormData(formData: FormData): Promise<Partial<CaregiverFor
   }
 
   // 4. Parse JSON Arrays/Objects
-  rawData.specialties = parseJsonEntry(formData.get('specialties'), []);
-  rawData.cookingSkills = parseJsonEntry(formData.get('cookingSkills'), []);
-  rawData.languages = parseJsonEntry(formData.get('languages'), []);
-  rawData.metadata = parseJsonEntry(formData.get('metadata'), {});
+  const specialtiesValue = formData.get('specialties');
+  if (specialtiesValue !== null) {
+    rawData.specialties = parseJsonEntry(specialtiesValue, []);
+  }
+
+  const cookingSkillsValue = formData.get('cookingSkills');
+  if (cookingSkillsValue !== null) {
+    rawData.cookingSkills = parseJsonEntry(cookingSkillsValue, []);
+  }
+
+  const languagesValue = formData.get('languages');
+  if (languagesValue !== null) {
+    rawData.languages = parseJsonEntry(languagesValue, []);
+  }
+
+  const metadataValue = formData.get('metadata');
+  if (metadataValue !== null) {
+    rawData.metadata = parseJsonEntry(metadataValue, {});
+  }
 
   return rawData;
 }
@@ -93,16 +108,18 @@ export async function createCaregiver(
   const { specialties, cookingSkills, languages, metadata, ...otherData } = validatedFields.data;
 
   try {
+    const prismaData: Prisma.CaregiverCreateInput = {
+      ...otherData,
+      specialties: JSON.stringify(specialties || []),
+      cookingSkills: JSON.stringify(cookingSkills || []),
+      languages: JSON.stringify(languages || []),
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      status: 'PENDING', 
+      level: 'TRAINEE',
+    };
+
     await db.caregiver.create({
-      data: {
-        ...otherData,
-        specialties: JSON.stringify(specialties),
-        cookingSkills: JSON.stringify(cookingSkills),
-        languages: JSON.stringify(languages),
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        status: 'PENDING', 
-        level: 'TRAINEE',
-      },
+      data: prismaData,
     });
 
     revalidatePath('/caregivers');
@@ -146,8 +163,52 @@ export async function updateCaregiver(
     return { success: false, message: 'Missing caregiver ID' };
   }
 
-  const data = await processFormData(formData);
-  const validatedFields = caregiverFormSchema.safeParse(data);
+  // 1. Get base data with file handling from helper (keep this for files)
+  const processedData = await processFormData(formData);
+  
+  // 2. Explicitly overwrite JSON fields by parsing raw FormData
+  // This ensures that even if processFormData fails or logic changes, we get the data here.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawData: any = { ...processedData };
+
+  // Explicitly Parse JSON Fields
+  const metadataRaw = formData.get('metadata');
+  if (metadataRaw && typeof metadataRaw === 'string') {
+    try {
+      rawData.metadata = JSON.parse(metadataRaw);
+    } catch (e) {
+      console.error("Metadata parsing failed:", e);
+    }
+  }
+
+  const specialtiesRaw = formData.get('specialties');
+  if (specialtiesRaw && typeof specialtiesRaw === 'string') {
+    try {
+      rawData.specialties = JSON.parse(specialtiesRaw);
+    } catch (e) {
+      console.error("Specialties parsing failed:", e);
+    }
+  }
+
+  const cookingSkillsRaw = formData.get('cookingSkills');
+  if (cookingSkillsRaw && typeof cookingSkillsRaw === 'string') {
+    try {
+      rawData.cookingSkills = JSON.parse(cookingSkillsRaw);
+    } catch (e) {
+      console.error("CookingSkills parsing failed:", e);
+    }
+  }
+
+  const languagesRaw = formData.get('languages');
+  if (languagesRaw && typeof languagesRaw === 'string') {
+    try {
+      rawData.languages = JSON.parse(languagesRaw);
+    } catch (e) {
+      console.error("Languages parsing failed:", e);
+    }
+  }
+
+  const validatedFields = caregiverFormSchema.safeParse(rawData);
 
   if (!validatedFields.success) {
     return {
@@ -160,15 +221,21 @@ export async function updateCaregiver(
   const { specialties, cookingSkills, languages, metadata, ...otherData } = validatedFields.data;
 
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: any = {
+      ...otherData,
+    };
+
+    if (specialties !== undefined) updateData.specialties = JSON.stringify(specialties);
+    if (cookingSkills !== undefined) updateData.cookingSkills = JSON.stringify(cookingSkills);
+    if (languages !== undefined) updateData.languages = JSON.stringify(languages);
+    if (metadata !== undefined) updateData.metadata = metadata ? JSON.stringify(metadata) : null;
+
+    console.log('Update Data Payload:', updateData);
+
     await db.caregiver.update({
       where: { idString: id },
-      data: {
-        ...otherData,
-        specialties: JSON.stringify(specialties),
-        cookingSkills: JSON.stringify(cookingSkills),
-        languages: JSON.stringify(languages),
-        metadata: metadata ? JSON.stringify(metadata) : null,
-      },
+      data: updateData,
     });
 
     revalidatePath('/caregivers');
@@ -194,39 +261,213 @@ export async function updateCaregiver(
   redirect(`/caregivers/${id}`);
 }
 
-export async function getCaregivers() {
-  try {
-    const caregivers = await db.caregiver.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+export interface GetCaregiversParams {
+  page?: number;
+  pageSize?: number;
+  query?: string;
+  minAge?: number;
+  maxAge?: number;
+  nativePlace?: string;
+  gender?: string;
+  liveInStatus?: string;
+  education?: string;
+  jobType?: string; // Comma separated
+  jobTypeMode?: 'AND' | 'OR';
+  certificate?: string; // Comma separated
+  certificateMode?: 'AND' | 'OR';
+  level?: string;
+  minExperience?: string;
+}
 
-    return caregivers.map((caregiver) => {
-      // Helper to safely parse JSON
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const safeParse = <T = string[]>(jsonString: string | null, defaultValue: T): T => {
-        if (!jsonString) return defaultValue;
-        try {
-          return JSON.parse(jsonString) as T;
-        } catch (e) {
-          console.error(`Failed to parse JSON for caregiver ${caregiver.idString}:`, e);
-          return defaultValue;
+export async function getCaregivers({
+  page = 1,
+  pageSize = 10,
+  query = '',
+  minAge,
+  maxAge,
+  nativePlace,
+  gender,
+  liveInStatus,
+  education,
+  jobType,
+  jobTypeMode = 'OR',
+  certificate,
+  certificateMode = 'OR',
+  level,
+  minExperience,
+}: GetCaregiversParams = {}) {
+  try {
+    const skip = (page - 1) * pageSize;
+
+    // Build Where Clause
+    const where: Prisma.CaregiverWhereInput = {
+      AND: [],
+    };
+
+    const andConditions = where.AND as Prisma.CaregiverWhereInput[];
+
+    // 1. Basic Text Search (Name, Phone, ID)
+    if (query) {
+      andConditions.push({
+        OR: [
+          { name: { contains: query } },
+          { phone: { contains: query } },
+          { idCardNumber: { contains: query } },
+        ],
+      });
+    }
+
+    // 2. Exact Match Filters
+    if (nativePlace) andConditions.push({ nativePlace: { equals: nativePlace } });
+    if (gender) andConditions.push({ gender: { equals: gender } });
+    if (liveInStatus) andConditions.push({ liveInStatus: { equals: liveInStatus } });
+    if (education) andConditions.push({ education: { equals: education } });
+    if (level) andConditions.push({ level: { equals: level } });
+
+    // 3. Age Filter (Calculated from BirthDate)
+    const now = new Date();
+    if (minAge !== undefined) {
+      // Younger than max date: Born after (Now - minAge)
+      const maxDate = new Date(now.getFullYear() - minAge, now.getMonth(), now.getDate());
+      andConditions.push({ birthDate: { lte: maxDate } });
+    }
+    if (maxAge !== undefined) {
+      // Older than min date: Born before (Now - maxAge)
+      const minDate = new Date(now.getFullYear() - maxAge - 1, now.getMonth(), now.getDate());
+      andConditions.push({ birthDate: { gte: minDate } });
+    }
+
+    // 4. Min Experience Filter
+    if (minExperience) {
+      const levels = ['ENTRY', 'INTERMEDIATE', 'SENIOR', 'EXPERT'];
+      const minIndex = levels.indexOf(minExperience);
+      if (minIndex !== -1) {
+        const allowedLevels = levels.slice(minIndex);
+        andConditions.push({ workExpLevel: { in: allowedLevels } });
+      }
+    }
+
+    // 5. JSON Field Filters (String Contains) with AND/OR Logic
+    if (jobType) {
+      const jobTypes = jobType.split(',').filter(Boolean);
+      if (jobTypes.length > 0) {
+        if (jobTypeMode === 'OR') {
+          andConditions.push({
+            OR: jobTypes.map((t) => ({ jobTypes: { contains: t } })),
+          });
+        } else {
+          // AND: Must contain ALL items
+          jobTypes.forEach((t) => {
+            andConditions.push({ jobTypes: { contains: t } });
+          });
         }
-      };
+      }
+    }
+
+    if (certificate) {
+      const certs = certificate.split(',').filter(Boolean);
+      if (certs.length > 0) {
+        if (certificateMode === 'OR') {
+          andConditions.push({
+            OR: certs.map((c) => ({ certificates: { contains: c } })),
+          });
+        } else {
+          // AND: Must contain ALL items
+          certs.forEach((c) => {
+            andConditions.push({ certificates: { contains: c } });
+          });
+        }
+      }
+    }
+
+    // Execute Query
+    const [total, caregivers] = await Promise.all([
+      db.caregiver.count({ where }),
+      db.caregiver.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          orders: {
+            where: {
+              status: 'CONFIRMED',
+              startDate: { lte: new Date() },
+              endDate: { gte: new Date() },
+            },
+            select: { id: true }, // Optimization: only fetch ID
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+
+    // Helper for safe JSON parsing
+    const parseArray = (val: string | null) => {
+      if (!val) return [];
+      try { return JSON.parse(val); } catch { return []; }
+    };
+
+    // Map Results
+    const data = caregivers.map((caregiver) => {
+      // Calculate Age
+      let age = 0;
+      if (caregiver.birthDate) {
+        const diff = Date.now() - new Date(caregiver.birthDate).getTime();
+        age = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+      }
+
+      // Dynamic Status Override
+      const isBusy = caregiver.orders && caregiver.orders.length > 0;
+      const displayStatus = isBusy ? '服务中' : caregiver.status;
 
       return {
-        ...caregiver,
-        specialties: safeParse<string[]>(caregiver.specialties, []),
-        cookingSkills: safeParse<string[]>(caregiver.cookingSkills, []),
-        languages: safeParse<string[]>(caregiver.languages, []),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        metadata: safeParse<any>(caregiver.metadata, {}),
+        id: caregiver.idString,
+        workerId: caregiver.workerId,
+        fullName: caregiver.name,
+        phone: caregiver.phone,
+        gender: caregiver.gender,
+        age: age,
+        nativePlace: caregiver.nativePlace,
+        education: caregiver.education,
+        jobTypes: parseArray(caregiver.jobTypes),
+        level: caregiver.level,
+        salaryRequirements: caregiver.salaryRequirements,
+        status: displayStatus,
+        certificates: parseArray(caregiver.certificates),
+        specialties: parseArray(caregiver.specialties),
+        avatarUrl: caregiver.avatarUrl,
+        liveInStatus: caregiver.liveInStatus,
+        experienceLevel: caregiver.workExpLevel,
+        yearsExperience: caregiver.workExpLevel, // Mapped for UI compatibility
       };
     });
+
+    return {
+      success: true,
+      data,
+      pagination: {
+        current: page,
+        pageSize,
+        total,
+        totalPages,
+      },
+    };
   } catch (error) {
     console.error('Failed to fetch caregivers:', error);
-    return [];
+    return {
+      success: false,
+      data: [],
+      pagination: {
+        current: page,
+        pageSize,
+        total: 0,
+        totalPages: 0,
+      },
+    };
   }
 }
 
@@ -240,26 +481,66 @@ export async function getCaregiver(id: string) {
 
     if (!caregiver) return null;
 
-    // Helper to safely parse JSON
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const safeParse = <T = string[]>(jsonString: string | null, defaultValue: T): T => {
-      if (!jsonString) return defaultValue;
-      try {
-        return JSON.parse(jsonString) as T;
-      } catch (e) {
-        console.error(`Failed to parse JSON for caregiver ${caregiver.idString}:`, e);
-        return defaultValue;
+    console.log('Raw DB Data for ID:', id, 'Metadata Type:', typeof caregiver?.metadata, 'Value:', caregiver?.metadata);
+
+    // Robust Inline Parsing for Metadata
+    let parsedMetadata = { rating: 0, internalNotes: '', customTags: [] };
+
+    if (caregiver.metadata) {
+      if (typeof caregiver.metadata === 'string') {
+        try {
+          const parsed = JSON.parse(caregiver.metadata);
+          parsedMetadata = { ...parsedMetadata, ...parsed };
+        } catch (e) {
+          console.error('Metadata JSON Parse Error:', e);
+        }
+      } else if (typeof caregiver.metadata === 'object') {
+        parsedMetadata = { ...parsedMetadata, ...(caregiver.metadata as any) };
       }
+    }
+
+    console.log('Final Parsed Metadata to Client:', parsedMetadata);
+
+    // Helper for arrays (simple fallback)
+    const parseArray = (val: any) => {
+      if (!val) return [];
+      if (typeof val === 'object') return val;
+      try { return JSON.parse(val); } catch { return []; }
     };
 
-    return {
-      ...caregiver,
-      specialties: safeParse<string[]>(caregiver.specialties, []),
-      cookingSkills: safeParse<string[]>(caregiver.cookingSkills, []),
-      languages: safeParse<string[]>(caregiver.languages, []),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      metadata: safeParse<any>(caregiver.metadata, {}),
+    const result = {
+      idString: caregiver.idString,
+      workerId: caregiver.workerId,
+      name: caregiver.name,
+      phone: caregiver.phone,
+      idCardNumber: caregiver.idCardNumber,
+      dob: caregiver.dob,
+      gender: caregiver.gender,
+      nativePlace: caregiver.nativePlace,
+      education: caregiver.education,
+      workExpLevel: caregiver.workExpLevel,
+      isLiveIn: caregiver.isLiveIn,
+      avatarUrl: caregiver.avatarUrl,
+      idCardFrontUrl: caregiver.idCardFrontUrl,
+      idCardBackUrl: caregiver.idCardBackUrl,
+      notes: caregiver.notes,
+      status: caregiver.status,
+      level: caregiver.level,
+      createdAt: caregiver.createdAt,
+      updatedAt: caregiver.updatedAt,
+      
+      // Explicitly parsed JSON fields
+      specialties: parseArray(caregiver.specialties),
+      cookingSkills: parseArray(caregiver.cookingSkills),
+      languages: parseArray(caregiver.languages),
+      // Serializing to string to bypass serialization stripping bugs
+      metadataJson: JSON.stringify(parsedMetadata), 
     };
+
+    console.log('Final Object Keys being sent:', Object.keys(result));
+    console.log('Final MetadataJson Value:', result.metadataJson);
+
+    return result;
   } catch (error) {
     console.error('Failed to fetch caregiver:', error);
     return null;

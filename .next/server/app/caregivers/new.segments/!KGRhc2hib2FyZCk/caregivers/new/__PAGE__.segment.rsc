@@ -1,6 +1,0 @@
-1:"$Sreact.fragment"
-2:I[33020,["/_next/static/chunks/c312745ad529c0f1.js","/_next/static/chunks/4c8636e83ed8a971.js","/_next/static/chunks/987f98d4aaa29cc1.js","/_next/static/chunks/6da47388e51a069e.js","/_next/static/chunks/45d24f083fe7d43e.js"],"CaregiverForm"]
-3:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/d2be314c3ece3fbe.js"],"OutletBoundary"]
-4:"$Sreact.suspense"
-0:{"buildId":"IlfBL_69pv2UHIp0j87Ps","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"max-w-3xl mx-auto py-10 px-4","children":[["$","div",null,{"className":"mb-8","children":[["$","h1",null,{"className":"text-2xl font-bold tracking-tight","children":"录入新阿姨"}],["$","p",null,{"className":"text-muted-foreground","children":"请填写护理员的详细信息，完成三步录入流程。"}]]}],["$","$L2",null,{}]]}],[["$","script","script-0",{"src":"/_next/static/chunks/987f98d4aaa29cc1.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/6da47388e51a069e.js","async":true}],["$","script","script-2",{"src":"/_next/static/chunks/45d24f083fe7d43e.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
-5:null

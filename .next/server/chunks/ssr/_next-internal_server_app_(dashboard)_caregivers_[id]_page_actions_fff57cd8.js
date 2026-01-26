@@ -1,3 +1,0 @@
-module.exports=[43180,a=>{"use strict";var b=a.i(37096);a.s([],67992),a.i(67992),a.s(["00754e3f21285456754e3076d4d452cd7e27ef9fdf",()=>b.getCaregivers,"400509650128b9441d3b6e30dff9430c535f4691a3",()=>b.getCaregiver,"403f70443daf8b11171fc03b5b4f6bf0bf05bfc786",()=>b.createCaregiver,"4088c83928f98e6171df2127078b477163f0817bb3",()=>b.deleteCaregiver,"60ecb0b5b6279be25daa1d5bb698f62756aca98e37",()=>b.updateCaregiver],43180)}];
-
-//# sourceMappingURL=_next-internal_server_app_%28dashboard%29_caregivers_%5Bid%5D_page_actions_fff57cd8.js.map

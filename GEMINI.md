@@ -1,74 +1,66 @@
-# Project Context: HouseCare-Pro (housekeeping-service)
+# HouseCare-Pro (Housekeeping Service) - Architect's Handoff Document
 
-## 1. System Role & Rules
-**Role:** 你是 HouseCare-Pro 项目的高级全栈工程师与架构师。
-**Language:** 请始终使用中文 (Chinese) 回答和编写注释。
-**Tech Stack:** 
-- **Framework:** Next.js 16.1.4 (App Router, Turbopack)
-- **Language:** TypeScript
-- **UI:** Tailwind CSS v4, Shadcn/UI
-- **Database:** **Microsoft SQL Server (MSSQL)**
-- **ORM:** **Prisma v5.10.2** (⚠️ STRICTLY LOCKED - Do not upgrade due to MSSQL stability)
-- **Forms:** React Hook Form + Zod
+## 1. Project Overview & Tech Stack
 
-## 2. Critical Architecture: SQL Server & Next.js 16 Strategy
+*   **Project:** HouseCare-Pro (专业家政服务管理平台)
+*   **Framework:** Next.js 16.1.4 (App Router, Turbopack)
+*   **Database:** Microsoft SQL Server (MSSQL)
+*   **ORM:** Prisma v5.10.2 (⚠️ **STRICTLY LOCKED** - 不得升级，以保持 MSSQL 稳定性)
+*   **UI:** Tailwind CSS v4, Shadcn/UI (基于 Radix UI)
+*   **Language:** TypeScript
+*   **Key Strategy:** 
+    *   **Server Actions:** 全面采用 Server Actions 进行数据处理。
+    *   **URL-Driven State:** 列表页的筛选、搜索、分页完全由 URL 参数驱动，确保状态可分享且刷新不丢失。
+    *   **"JSON Tunnel" for MSSQL:** 由于 SQL Server 不支持标量数组 (`String[]`)，所有集合字段均存储为 `NVarChar(Max)` 的 JSON 字符串。
 
-### A. 数组字段处理 (The "JSON Workaround")
-SQL Server 不支持标量数组 (`String[]`)。
-- **Schema 定义**: 使用 `String @db.NVarChar(Max)` 存储 JSON 字符串。
-  ```prisma
-  specialties   String? @db.NVarChar(Max) // Stores '["Cooking", "Cleaning"]'
-  ```
-- **写入逻辑 (Write)**: 在 Server Action 中必须使用 `JSON.stringify`。
-- **读取逻辑 (Read)**: 在 Server Action 返回数据前必须使用 `JSON.parse`。
+## 2. Feature Status Matrix (Current State)
 
-### B. Next.js 16 Async Params
-Next.js 16 中，Page 组件的 `params` 和 `searchParams` 变成了 **Promise**。
-- **规则**: 必须在组件或逻辑中使用 `await params`。
-  ```typescript
-  // ❌ 错误
-  const id = params.id;
-  // ✅ 正确
-  const { id } = await params;
-  ```
+| 模块 | 功能状态 | 技术细节 |
+| :--- | :--- | :--- |
+| **Caregiver (V2.0)** | ✅ 完成 | 包含 `jobTypes`, `certificates`, `birthDate`, `nativePlace` 等新 Schema 字段。 |
+| **Filter UI** | ✅ 完成 | 实现了 `ComprehensiveFilter` (标签云风格) 和 `MultiSelectLogic` (下拉多选组件)。 |
+| **Advanced Filter** | ✅ 完成 | 支持 **AND/OR 逻辑切换**。通过 URL 参数 `jobTypeMode` 控制多选字段的交集/并集查询。 |
+| **Order (Phase 1)** | ✅ 完成 | 已建立 `User` (客户) 与 `Order` (订单) 模型。支持 1:n 关联。 |
+| **Dynamic Status** | ✅ 完成 | `getCaregivers` 会根据活跃订单自动将阿姨状态覆写为 **"服务中"**。 |
+| **Database** | ✅ 完成 | 已执行 `init_order_module` 迁移，并生成了涵盖各种忙闲场景的 Seed 数据。 |
 
-### C. 表单导航与幽灵提交 (Ghost Submission)
-多步骤表单中的“下一步”/“上一步”按钮必须明确指定 type。
-- **规则**: 非提交按钮必须写 `type="button"`，否则会被视为 `submit` 触发验证或提交。
+## 3. Critical Logic Chains (核心逻辑链路)
 
-### D. Rating Input "Sticky Zero" Fix
-React 的受控数字输入框在处理 `0` 和空字符串时有原生缺陷。
-- **规则**: 必须使用 **Text-as-Number** 模式。
-  ```tsx
-  <Input
-    type="text"           // 禁止浏览器数字处理
-    inputMode="decimal"   // 保持移动端键盘
-    onChange={(e) => {
-       if (e.target.value === '') field.onChange(undefined); // 允许彻底清空
-       // ... regex validation
-    }}
-  />
-  ```
-  ### E. Server Action Redirect Pattern
-Next.js 的 `redirect()` 通过抛出特殊 Error (`NEXT_REDIRECT`) 来中断执行。
-- **规则**: `redirect()` 必须放在 `try/catch` 代码块的 **外部 (最后一行)**。
-- **原因**: 如果放在 `try` 块内，会被 `catch` 捕获，导致页面无法跳转且前端收到 "Unknown Error"。
+### A. Dynamic Availability (自动忙闲逻辑)
+*   **输入:** 在执行 `getCaregivers` 时，系统会检查当前日期。
+*   **处理:** 使用 Prisma `include` 关联查询该阿姨的订单：
+    *   条件：`status: 'CONFIRMED'` 且 `startDate <= Today <= endDate`。
+*   **输出:** 
+    *   如果存在匹配订单，返回给前端的 `status` 字段会被强制覆写为 **"服务中" (In Service)**。
+    *   如果不存在，则保留数据库原有的 `status` (如 "待岗", "请假")。
+*   **精度:** 天级精度 (Day Precision)。
 
-## 3. Feature Status Matrix (Caregivers Module)
-业务逻辑位于 `src/features/caregivers/`。
+### B. JSON Tunnel Strategy (MSSQL 兼容方案)
+*   **存储:** `jobTypes`, `certificates`, `specialties`, `cookingSkills`, `languages` 全都以 JSON 字符串形式存入 `@db.NVarChar(Max)`。
+*   **查询:** 
+    *   **OR 模式:** 使用 Prisma 的 `contains` 操作符生成 `{ OR: [ { field: { contains: val1 } }, ... ] }`。
+    *   **AND 模式:** 动态构建多个 `contains` 条件放入 `AND` 数组。
+*   **映射:** Server Action 必须显式解析 JSON 字符串为数组后再返回。
 
-| 功能 | 状态 | URL | 说明 |
-| :--- | :--- | :--- | :--- |
-| **Create** | ✅ 完成 | `/caregivers/new` | 表单验证，JSON序列化入库 |
-| **List** | ✅ 完成 | `/caregivers` | 解析 JSON 标签，Card 布局展示 |
-| **Detail** | ✅ 完成 | `/caregivers/[id]` | 已修复 Async Params 导致的 500 错误 |
-| **Update** | ✅ 完成 | `/caregivers/[id]/edit` | 已修复 Navigation Bug，实现 Rating "Text-as-Number" 模式 |
-| **Delete** | ✅ 完成 | - | Server Action + Redirect 逻辑修复 |
-| **Metadata**| ✅ 完成 | - | Rating (0-5), Tags, Internal Notes 均已打通 |
-| **Upload** | ⏳ 待办 | - | 目前使用 Mock URL，需集成 Local Storage 或 UploadThing |
+## 4. Minefield Map (排雷指南 - 开发者必读)
 
-## 4. Next Steps
-1.  **Task 4 - Avatar Image Upload**: 
-    -   目标：替换目前的文本输入框。
-    -   策略：优先实现本地文件存储 (Local Storage) 用于演示，或集成 OSS。
-2.  **Order Module**: 开始搭建 `src/features/orders`。
+1.  **Strict Rule: No Spread Operator!**
+    *   在 Server Action 返回数据给 Client Component 时，**严禁使用 `{ ...caregiver }`**。
+    *   **原因:** Prisma 返回的对象可能包含 `undefined` 或未解析的 JSON 字符串，会导致 Next.js 序列化错误或前端解析失败。必须逐个字段显式映射。
+2.  **Async Params (Next.js 16):**
+    *   `page.tsx` 中的 `params` 和 `searchParams` 是 **Promise**。
+    *   **必须使用** `const searchParams = await props.searchParams`。
+3.  **MSSQL JSON Search:**
+    *   由于是字符串搜索，确保存储时 JSON 格式统一（如 `["月嫂"]`）。
+4.  **Redirect Pattern:**
+    *   `redirect()` 必须放在 `try/catch` 块外部，因为它通过抛出错误实现跳转。
+
+## 5. Next Immediate Tasks (待办事项)
+
+1.  **Order Creation UI:** 开发下单页面，允许客户选择日期范围并指定阿姨。
+2.  **Conflict Validation:** 在创建订单前，需复用 `getCaregivers` 的逻辑校验阿姨在该时间段是否已有重叠订单。
+3.  **Caregiver Detail V2:** 更新阿姨详情页，展示其历史订单和排期日历。
+
+---
+*Last Updated: 2026-01-26*
+*Current Architect: Gemini Agent*

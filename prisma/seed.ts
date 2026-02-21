@@ -73,6 +73,7 @@ async function main() {
         workExpLevel: workExpLevel,
         liveInStatus: pickOne(LIVE_IN_STATUS),
         salaryRequirements: salary,
+        monthlySalary: salary,
         
         // JSON Fields (Stored as String for MSSQL)
         jobTypes: JSON.stringify(jobTypes),
@@ -159,6 +160,20 @@ async function main() {
         orderNo: `${Date.now()}${i}`,
         status: 'CONFIRMED',
         amount: faker.number.int({ min: 1000, max: 10000 }),
+        
+        // New Financials
+        dailySalary: faker.number.float({ min: 200, max: 500, fractionDigits: 2 }),
+        totalAmount: faker.number.float({ min: 3000, max: 10000, fractionDigits: 2 }),
+        
+        // Dispatch Info
+        dispatcherName: 'System Admin',
+        dispatcherPhone: '13800000000',
+        clientLocation: faker.location.streetAddress(), // Using address as location
+        serviceType: 'MonthlyCare',
+        managementFee: faker.number.int({ min: 500, max: 2000 }),
+        remarks: 'Seeded Order',
+        paymentStatus: 'UNPAID', // Enum value as string
+
         startDate: getDate(startDate),
         endDate: getDate(endDate),
         address: faker.location.streetAddress(),

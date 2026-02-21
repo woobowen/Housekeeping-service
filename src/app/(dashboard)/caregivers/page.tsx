@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { getCaregivers } from '@/features/caregivers/actions';
 import { CaregiverList } from '@/features/caregivers/components/caregiver-list';
 import { ComprehensiveFilter } from '@/features/caregivers/components/comprehensive-filter';
+import { CaregiverImportDialog } from '@/features/caregivers/components/caregiver-import-dialog';
+import { DownloadTemplateButton } from '@/features/caregivers/components/download-template-button';
 import { Plus } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -14,51 +16,73 @@ interface PageProps {
 export default async function CaregiversPage(props: PageProps) {
   const searchParams = await props.searchParams;
   
+  // Helper to ensure we have string arrays for multi-select fields (handles both array and comma-string)
+  const toArray = (val: string | string[] | undefined): string[] | undefined => {
+    if (!val) return undefined;
+    if (Array.isArray(val)) return val;
+    return val.split(',').filter(Boolean);
+  };
+
   // Parse Params
   const page = Number(searchParams.page) || 1;
   const query = (searchParams.query as string) || '';
-  const level = (searchParams.level as string) || undefined;
-  const minExperience = (searchParams.minExperience as string) || undefined;
   const minAge = searchParams.minAge ? Number(searchParams.minAge) : undefined;
   const maxAge = searchParams.maxAge ? Number(searchParams.maxAge) : undefined;
+  const minExperience = searchParams.minExperience ? Number(searchParams.minExperience) : undefined;
+  const maxExperience = searchParams.maxExperience ? Number(searchParams.maxExperience) : undefined;
+  
   const nativePlace = (searchParams.nativePlace as string) || undefined;
   const gender = (searchParams.gender as string) || undefined;
   const liveInStatus = (searchParams.liveInStatus as string) || undefined;
-  const education = (searchParams.education as string) || undefined;
-  const jobType = (searchParams.jobType as string) || undefined;
-  const certificate = (searchParams.certificate as string) || undefined;
+  const education = toArray(searchParams.education);
+  
+  // Multi-select categories
+  const jobTypes = toArray(searchParams.jobTypes);
+  const jobTypeMode = (searchParams.jobTypesMode as 'AND' | 'OR') || 'OR';
+  
+  const specialties = toArray(searchParams.specialties);
+  const specialtyMode = (searchParams.specialtiesMode as 'AND' | 'OR') || 'OR';
+  
+  const certificates = toArray(searchParams.certificates);
+  const certificateMode = (searchParams.certificatesMode as 'AND' | 'OR') || 'OR';
+  
+  const cookingSkills = toArray(searchParams.cookingSkills);
+  const cookingSkillMode = (searchParams.cookingSkillsMode as 'AND' | 'OR') || 'OR';
 
   const { data, pagination } = await getCaregivers({ 
     page, 
     pageSize: 9, 
     query,
-    level,
-    minExperience,
     minAge,
     maxAge,
+    minExperience,
+    maxExperience,
     nativePlace,
     gender,
     liveInStatus,
     education,
-    jobType,
-    certificate
+    jobTypes,
+    jobTypeMode,
+    specialties,
+    specialtyMode,
+    certificates,
+    certificateMode,
+    cookingSkills,
+    cookingSkillMode
   });
 
   // Helper to generate pagination URLs
   const createPageUrl = (newPage: number) => {
     const params = new URLSearchParams();
-    if (query) params.set('query', query);
-    if (level) params.set('level', level);
-    if (minExperience) params.set('minExperience', minExperience);
-    if (minAge) params.set('minAge', minAge.toString());
-    if (maxAge) params.set('maxAge', maxAge.toString());
-    if (nativePlace) params.set('nativePlace', nativePlace);
-    if (gender) params.set('gender', gender);
-    if (liveInStatus) params.set('liveInStatus', liveInStatus);
-    if (education) params.set('education', education);
-    if (jobType) params.set('jobType', jobType);
-    if (certificate) params.set('certificate', certificate);
-    
+    // Reconstruct all current params
+    Object.entries(searchParams).forEach(([key, value]) => {
+      if (key === 'page') return;
+      if (Array.isArray(value)) {
+        value.forEach(v => params.append(key, v));
+      } else if (value) {
+        params.set(key, value);
+      }
+    });
     params.set('page', newPage.toString());
     return `/caregivers?${params.toString()}`;
   };
@@ -67,25 +91,40 @@ export default async function CaregiversPage(props: PageProps) {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">护理员管理</h1>
-          <p className="text-muted-foreground mt-2">
-            管理系统中的所有护理员信息
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">阿姨库管理</h1>
+          <p className="text-muted-foreground mt-2 text-sm">
+            全量查看与多维度筛选所有护理员。
           </p>
         </div>
-        <Button asChild>
-          <Link href="/caregivers/new">
-            <Plus className="mr-2 h-4 w-4" />
-            新建护理员
-          </Link>
-        </Button>
+        <div className="flex flex-wrap gap-3">
+          <div className="flex gap-2 mr-4 border-r pr-4 border-slate-200">
+            <Button variant="outline" asChild size="sm">
+              <Link href="/orders">新建订单</Link>
+            </Button>
+            <Button variant="outline" asChild size="sm">
+              <Link href="/salary-settlement">薪资结算</Link>
+            </Button>
+            <Button variant="outline" asChild size="sm">
+              <Link href="/settings/fields">字段设置</Link>
+            </Button>
+          </div>
+          <DownloadTemplateButton />
+          <CaregiverImportDialog />
+          <Button asChild className="shadow-md">
+            <Link href="/caregivers/new">
+              <Plus className="mr-2 h-4 w-4" />
+              手工录入阿姨
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <ComprehensiveFilter />
 
-      <CaregiverList data={data} />
+      <CaregiverList data={data || []} />
       
       {/* Pagination Controls */}
-      <div className="flex justify-center gap-2 mt-8">
+      <div className="flex justify-center gap-2 mt-12 pb-8">
         <Button 
           variant="outline" 
           disabled={pagination.current <= 1}
@@ -98,9 +137,11 @@ export default async function CaregiversPage(props: PageProps) {
           )}
         </Button>
         
-        <span className="flex items-center text-sm text-muted-foreground px-2">
-          第 {pagination.current} / {pagination.totalPages || 1} 页
-        </span>
+        <div className="flex items-center px-6 rounded-full bg-slate-50 border border-slate-100 shadow-inner">
+           <span className="text-sm font-medium text-slate-600">
+            第 <span className="text-primary font-bold">{pagination.current}</span> / {pagination.totalPages || 1} 页
+          </span>
+        </div>
 
         <Button 
           variant="outline" 

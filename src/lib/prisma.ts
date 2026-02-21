@@ -18,6 +18,7 @@ declare const globalThis: {
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
 
+export { prisma };
 export const db = prisma;
 
 export default prisma;

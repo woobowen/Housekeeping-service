@@ -22,17 +22,37 @@ model Caregiver {
   nativePlace   String?
   education     String?
 
+  // Residence Info
+  currentResidence String?
+  residenceDetail  String?
+
+  // Physical Info
+  height        Int?
+  weight        Int?
+
   // Professional Info
   workExpLevel       String?
-  liveInStatus       String?
+  experienceYears    Int?
+  isLiveIn           String?  // Map to LiveInStatusEnum
+  isTrainee          Boolean  @default(false)
   salaryRequirements Int?
+  monthlySalary      Decimal  @default(0) @db.Decimal(10, 2)
   
-  // JSON Fields (Stored as String in MSSQL)
+  // JSON Tunnel Fields (Stored as String in MSSQL)
   jobTypes      String? @db.NVarChar(Max)
   specialties   String? @db.NVarChar(Max)
   cookingSkills String? @db.NVarChar(Max)
   languages     String? @db.NVarChar(Max)
   certificates  String? @db.NVarChar(Max)
+  
+  // Media Lists (Stored as JSON string)
+  healthCertImages String? @db.NVarChar(Max)
+  lifeImages       String? @db.NVarChar(Max)
+
+  // Long Text Content
+  workHistory   String? @db.NVarChar(Max)
+  selfIntro     String? @db.NVarChar(Max)
+  reviews       String? @db.NVarChar(Max)
 
   // Files
   avatarUrl      String?
@@ -40,7 +60,7 @@ model Caregiver {
   idCardBackUrl  String?
 
   notes          String?
-  metadata       String? @db.NVarChar(Max)
+  customData     String? @db.NVarChar(Max) // Stores dynamic field values as JSON
 
   // System Fields
   status    String   @default("PENDING")
@@ -50,6 +70,8 @@ model Caregiver {
 
   // Relations
   orders    Order[]
+  timeline  CaregiverTimeline[]
+  salarySettlements SalarySettlement[]
 }
 
 model User {
@@ -65,24 +87,93 @@ model User {
 model Order {
   id           String   @id @default(cuid())
   orderNo      String   @unique
-  status       String   // 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'
+  status       String   @default("PENDING") // Enum: PENDING, CONFIRMED, CANCELLED
   amount       Decimal  @db.Decimal(10, 2)
+  
+  // Financials
+  salaryMode    String   @default("DAILY") // "MONTHLY" or "DAILY"
+  dailySalary   Decimal? @db.Decimal(10, 2)
+  monthlySalary Decimal? @db.Decimal(10, 2)
+  durationDays  Int?
+  actualWorkedDays Int?
+
+  totalAmount   Decimal  @db.Decimal(10, 2)
+  managementFee Decimal @default(0) @db.Decimal(10, 2)
+  
+  // Dispatch Info
+  clientName     String?
+  dispatcherName String
+  dispatcherPhone String
+  clientLocation String
+  serviceType    String
+  remarks        String?
+  
+  paymentStatus  String @default("UNPAID")
+
   startDate    DateTime
   endDate      DateTime
   address      String
   contactName  String
   contactPhone String
   requirements String?  @db.NVarChar(Max)
+  customData   String?  @db.NVarChar(Max) // Stores dynamic field values as JSON
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  clientId     String
-  client       User     @relation(fields: [clientId], references: [id])
+  clientId     String?
+  client       User?    @relation(fields: [clientId], references: [id])
 
   caregiverId  String
   caregiver    Caregiver @relation(fields: [caregiverId], references: [idString])
 
-  @@index([caregiverId, status])
+  @@index([caregiverId, status, startDate, endDate])
   @@index([startDate, endDate])
+}
+
+model CaregiverTimeline {
+  idString    String   @id @default(cuid())
+  content     String   @db.NVarChar(Max)
+  imageUrls   String   @db.NVarChar(Max) // JSON array
+  createdAt   DateTime @default(now())
+  
+  caregiverId String
+  caregiver   Caregiver @relation(fields: [caregiverId], references: [idString], onDelete: Cascade)
+}
+
+model SystemFieldDefinition {
+  id          String   @id @default(cuid())
+  targetModel String   // e.g., "Caregiver", "Order"
+  name        String   // Internal key, e.g., "zodiac"
+  label       String   // Display label, e.g., "属相"
+  type        String   // "TEXT", "NUMBER", "SELECT", "DATE"
+  options     String?  @db.NVarChar(Max) // JSON array for SELECT type
+  required    Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([targetModel, name])
+}
+
+model SystemSettings {
+  key         String   @id // e.g., "caregiver_field_config"
+  value       String   @db.NVarChar(Max) // Stores JSON structure
+  description String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SalarySettlement {
+  id          String   @id @default(cuid())
+  caregiverId String
+  caregiver   Caregiver @relation(fields: [caregiverId], references: [idString])
+  month       String   // Format "YYYY-MM"
+  totalAmount Decimal  @db.Decimal(10, 2)
+  status      String   @default("PENDING") // PENDING, PAID
+  details     String?  @db.NVarChar(Max) // JSON breakdown
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([caregiverId, month])
 }

@@ -1,66 +1,57 @@
-# HouseCare-Pro (Housekeeping Service) - Architect's Handoff Document
+# HouseCare-Pro (专业家政服务管理平台) - 架构与开发宪法
 
-## 1. Project Overview & Tech Stack
+## 1. 系统架构与技术栈 (Architecture & Stack)
+*   **核心框架**: Next.js 16.1.4 (App Router), TypeScript 5.x。
+*   **目录规范 (Feature-based)**: 采用功能驱动的目录结构 `src/features/{feature}`。
+    *   `components/`: UI 组件与局部逻辑。
+    *   `actions.ts`: 所有的 Server Actions（业务逻辑核心）。
+    *   `schemas.ts`: Zod 校验规则。
+    *   `types.ts`: 类型定义。
+*   **数据流**: `Client Component` -> `Server Action` -> `Zod Validation` -> `Prisma Client` -> `MSSQL`。
+*   **ORM**: Prisma v5.10.2 (⚠️ **LOCKED**)。由于 MSSQL 驱动在某些 Prisma 版本下不稳定，严禁在未经过充分测试的情况下升级。
 
-*   **Project:** HouseCare-Pro (专业家政服务管理平台)
-*   **Framework:** Next.js 16.1.4 (App Router, Turbopack)
-*   **Database:** Microsoft SQL Server (MSSQL)
-*   **ORM:** Prisma v5.10.2 (⚠️ **STRICTLY LOCKED** - 不得升级，以保持 MSSQL 稳定性)
-*   **UI:** Tailwind CSS v4, Shadcn/UI (基于 Radix UI)
-*   **Language:** TypeScript
-*   **Key Strategy:** 
-    *   **Server Actions:** 全面采用 Server Actions 进行数据处理。
-    *   **URL-Driven State:** 列表页的筛选、搜索、分页完全由 URL 参数驱动，确保状态可分享且刷新不丢失。
-    *   **"JSON Tunnel" for MSSQL:** 由于 SQL Server 不支持标量数组 (`String[]`)，所有集合字段均存储为 `NVarChar(Max)` 的 JSON 字符串。
+## 2. 数据库设计与规范 (Database Norms)
 
-## 2. Feature Status Matrix (Current State)
+### A. "JSON 隧道" 策略 (JSON Tunnel)
+由于 MSSQL 不原生支持 Scalar Arrays (字符串数组)，我们使用 `NVarChar(Max)` 存储序列化后的 JSON 字符串。
+*   **涉及字段**: `Caregiver` 中的 `jobTypes`, `specialties`, `certificates`, `cookingSkills`, `languages`, `healthCertImages`, `lifeImages`。
+*   **读写规范**:
+    *   **写入**: 在 Server Action 中通过 `JSON.stringify()` 转化数组。
+    *   **读取**: 在 Client Component 获取数据后，必须在 `defaultValues` 或展示逻辑中显式使用 `JSON.parse()`。
+    *   **空值处理**: 严禁存储 `null`。如果数组为空，应存储 `[]` 或在读取时回退到 `[]`。
 
-| 模块 | 功能状态 | 技术细节 |
-| :--- | :--- | :--- |
-| **Caregiver (V2.0)** | ✅ 完成 | 包含 `jobTypes`, `certificates`, `birthDate`, `nativePlace` 等新 Schema 字段。 |
-| **Filter UI** | ✅ 完成 | 实现了 `ComprehensiveFilter` (标签云风格) 和 `MultiSelectLogic` (下拉多选组件)。 |
-| **Advanced Filter** | ✅ 完成 | 支持 **AND/OR 逻辑切换**。通过 URL 参数 `jobTypeMode` 控制多选字段的交集/并集查询。 |
-| **Order (Phase 1)** | ✅ 完成 | 已建立 `User` (客户) 与 `Order` (订单) 模型。支持 1:n 关联。 |
-| **Dynamic Status** | ✅ 完成 | `getCaregivers` 会根据活跃订单自动将阿姨状态覆写为 **"服务中"**。 |
-| **Database** | ✅ 完成 | 已执行 `init_order_module` 迁移，并生成了涵盖各种忙闲场景的 Seed 数据。 |
+### B. ID 命名规范
+为了区分不同模型的 ID 逻辑，我们采用了非对称命名：
+*   **Caregiver**: 主键为 `idString` (CUID)。
+*   **Order**: 主键为 `id` (CUID)。
+*   **SalarySettlement**: 主键为 `id` (CUID)。
+*   **CaregiverTimeline**: 主键为 `idString` (CUID)。
+*   **原因**: 历史遗留与 MSSQL 迁移过程中的兼容性考量，开发时请务必确认 `where` 子句中的键名。
 
-## 3. Critical Logic Chains (核心逻辑链路)
+## 3. 核心业务逻辑 (Business Logic)
 
-### A. Dynamic Availability (自动忙闲逻辑)
-*   **输入:** 在执行 `getCaregivers` 时，系统会检查当前日期。
-*   **处理:** 使用 Prisma `include` 关联查询该阿姨的订单：
-    *   条件：`status: 'CONFIRMED'` 且 `startDate <= Today <= endDate`。
-*   **输出:** 
-    *   如果存在匹配订单，返回给前端的 `status` 字段会被强制覆写为 **"服务中" (In Service)**。
-    *   如果不存在，则保留数据库原有的 `status` (如 "待岗", "请假")。
-*   **精度:** 天级精度 (Day Precision)。
+### A. 薪资计算引擎 (Salary Math)
+*   **标准**: 系统默认按 **26天/月** 计算日薪。
+*   **公式**: `DailyRate = MonthlySalary / 26`。
+*   **精度控制**: 所有的日薪计算结果必须保留两位小数 (`.toFixed(2)`) 并转化回 `Number` 类型，以防止浮动汇率造成的财务误差。
+*   **优先级**: 订单中的 `dailySalary` 具有最高优先级，若未定义则根据关联家政员的 `monthlySalary` 进行实时折算。
 
-### B. JSON Tunnel Strategy (MSSQL 兼容方案)
-*   **存储:** `jobTypes`, `certificates`, `specialties`, `cookingSkills`, `languages` 全都以 JSON 字符串形式存入 `@db.NVarChar(Max)`。
-*   **查询:** 
-    *   **OR 模式:** 使用 Prisma 的 `contains` 操作符生成 `{ OR: [ { field: { contains: val1 } }, ... ] }`。
-    *   **AND 模式:** 动态构建多个 `contains` 条件放入 `AND` 数组。
-*   **映射:** Server Action 必须显式解析 JSON 字符串为数组后再返回。
+### B. 订单防冲突逻辑 (Order Overlap)
+*   **维度**: 基于“天”的判定（忽略具体小时）。
+*   **判定准则**: `(StartA <= EndB) && (EndA >= StartB)`。
+*   **动作**: 只有状态非 `CANCELLED` 的订单会参与冲突判定。
 
-## 4. Minefield Map (排雷指南 - 开发者必读)
+### C. 财务结算逻辑 (Settlement)
+*   **跨月处理**: 计算订单在目标月份内的“交集天数”（Intersection Days）。
+*   **公式**: `(min(OrderEndDate, MonthEndDate) - max(OrderStartDate, MonthStartDate)) + 1`。
 
-1.  **Strict Rule: No Spread Operator!**
-    *   在 Server Action 返回数据给 Client Component 时，**严禁使用 `{ ...caregiver }`**。
-    *   **原因:** Prisma 返回的对象可能包含 `undefined` 或未解析的 JSON 字符串，会导致 Next.js 序列化错误或前端解析失败。必须逐个字段显式映射。
-2.  **Async Params (Next.js 16):**
-    *   `page.tsx` 中的 `params` 和 `searchParams` 是 **Promise**。
-    *   **必须使用** `const searchParams = await props.searchParams`。
-3.  **MSSQL JSON Search:**
-    *   由于是字符串搜索，确保存储时 JSON 格式统一（如 `["月嫂"]`）。
-4.  **Redirect Pattern:**
-    *   `redirect()` 必须放在 `try/catch` 块外部，因为它通过抛出错误实现跳转。
-
-## 5. Next Immediate Tasks (待办事项)
-
-1.  **Order Creation UI:** 开发下单页面，允许客户选择日期范围并指定阿姨。
-2.  **Conflict Validation:** 在创建订单前，需复用 `getCaregivers` 的逻辑校验阿姨在该时间段是否已有重叠订单。
-3.  **Caregiver Detail V2:** 更新阿姨详情页，展示其历史订单和排期日历。
+## 4. UI/UX 交互规范
+*   **受控表单**: `OrderForm` 等组件的 `defaultValues` 严禁出现 `null`。所有可选字段必须回退到 `""` (String) 或 `0` (Number)，否则会触发 React 受控组件警告。
+*   **性别/状态视觉**:
+    *   **男**: `blue-600` / `bg-blue-100`。
+    *   **女**: `pink-600` / `bg-pink-100`。
+    *   **状态勋章**: `PENDING` (Secondary), `CONFIRMED` (Green), `COMPLETED` (Slate), `CANCELLED` (Destructive)。
+*   **日期格式化**: 统一使用 `date-fns` 的 `format(date, 'yyyy-MM-dd')` 或 `yyyy年MM月dd日` (带 `zhCN` locale)。
 
 ---
-*Last Updated: 2026-01-26*
-*Current Architect: Gemini Agent*
+*Architect: Gemini Agent*

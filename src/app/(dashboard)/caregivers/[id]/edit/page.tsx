@@ -20,27 +20,50 @@ export default async function EditCaregiverPage(props: PageProps) {
   }
 
   // Transform db result to form values
-  // getCaregiver already parses JSON strings to arrays, so we just need to ensure types match
-  const initialData: CaregiverFormValues & { idString: string, metadataJson?: string } = {
+  const initialData: any = {
     idString: caregiver.idString,
     workerId: caregiver.workerId,
     name: caregiver.name,
     phone: caregiver.phone,
-    idCardNumber: caregiver.idCardNumber,
-    dob: caregiver.dob ? new Date(caregiver.dob) : undefined,
-    gender: (caregiver.gender as any) || null,
-    nativePlace: caregiver.nativePlace || undefined,
-    education: (caregiver.education as any) || null,
-    workExpLevel: (caregiver.workExpLevel as any) || null,
-    isLiveIn: (caregiver.isLiveIn as any) || null,
-    specialties: caregiver.specialties,
-    cookingSkills: caregiver.cookingSkills,
-    languages: caregiver.languages,
+    idCardNumber: caregiver.idCardNumber || '',
+    dob: caregiver.dob ? new Date(caregiver.dob) : null,
+    gender: caregiver.gender || '女',
+    nativePlace: caregiver.nativePlace || '',
+    education: caregiver.education || '',
+    currentResidence: caregiver.currentResidence || '',
+    residenceDetail: caregiver.residenceDetail || '',
+    
+    // Physical Info
+    height: caregiver.height ? Number(caregiver.height) : undefined,
+    weight: caregiver.weight ? Number(caregiver.weight) : undefined,
+    
+    // Professional Info
+    experienceYears: caregiver.experienceYears ? Number(caregiver.experienceYears) : undefined,
+    isLiveIn: caregiver.isLiveIn || '',
+    isTrainee: !!caregiver.isTrainee,
+    
+    // Skills & JSON Arrays
+    jobTypes: Array.isArray(caregiver.jobTypes) ? caregiver.jobTypes : [],
+    specialties: Array.isArray(caregiver.specialties) ? caregiver.specialties : [],
+    cookingSkills: Array.isArray(caregiver.cookingSkills) ? caregiver.cookingSkills : [],
+    languages: Array.isArray(caregiver.languages) ? caregiver.languages : [],
+    certificates: Array.isArray(caregiver.certificates) ? caregiver.certificates : [],
+    
+    // Content Blocks
+    selfIntro: caregiver.selfIntro || '',
+    workHistory: caregiver.workHistory || '',
+    reviews: caregiver.reviews || '',
+    notes: caregiver.notes || '',
+    
+    // Files & Images
     avatarUrl: caregiver.avatarUrl || '',
     idCardFrontUrl: caregiver.idCardFrontUrl || '',
     idCardBackUrl: caregiver.idCardBackUrl || '',
-    notes: caregiver.notes || undefined,
-    metadataJson: (caregiver as any).metadataJson, // Pass the JSON string explicitly
+    healthCertImages: Array.isArray(caregiver.healthCertImages) ? caregiver.healthCertImages : [],
+    lifeImages: Array.isArray(caregiver.lifeImages) ? caregiver.lifeImages : [],
+    
+    // Custom/System Data
+    customData: caregiver.customData || '',
   };
 
   return (

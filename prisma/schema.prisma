@@ -5,8 +5,9 @@ generator client {
 }
 
 datasource db {
-  provider  = "sqlserver"
+  provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // === 下面是你定义的模型 ===
@@ -38,21 +39,21 @@ model Caregiver {
   salaryRequirements Int?
   monthlySalary      Decimal  @default(0) @db.Decimal(10, 2)
   
-  // JSON Tunnel Fields (Stored as String in MSSQL)
-  jobTypes      String? @db.NVarChar(Max)
-  specialties   String? @db.NVarChar(Max)
-  cookingSkills String? @db.NVarChar(Max)
-  languages     String? @db.NVarChar(Max)
-  certificates  String? @db.NVarChar(Max)
+  // JSON Tunnel Fields (Stored as String in MSSQL/Postgres)
+  jobTypes      String?
+  specialties   String?
+  cookingSkills String?
+  languages     String?
+  certificates  String?
   
   // Media Lists (Stored as JSON string)
-  healthCertImages String? @db.NVarChar(Max)
-  lifeImages       String? @db.NVarChar(Max)
+  healthCertImages String?
+  lifeImages       String?
 
   // Long Text Content
-  workHistory   String? @db.NVarChar(Max)
-  selfIntro     String? @db.NVarChar(Max)
-  reviews       String? @db.NVarChar(Max)
+  workHistory   String?
+  selfIntro     String?
+  reviews       String?
 
   // Files
   avatarUrl      String?
@@ -60,7 +61,7 @@ model Caregiver {
   idCardBackUrl  String?
 
   notes          String?
-  customData     String? @db.NVarChar(Max) // Stores dynamic field values as JSON
+  customData     String? // Stores dynamic field values as JSON
 
   // System Fields
   status    String   @default("PENDING")
@@ -115,8 +116,8 @@ model Order {
   address      String
   contactName  String
   contactPhone String
-  requirements String?  @db.NVarChar(Max)
-  customData   String?  @db.NVarChar(Max) // Stores dynamic field values as JSON
+  requirements String?
+  customData   String?  // Stores dynamic field values as JSON
   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -133,8 +134,8 @@ model Order {
 
 model CaregiverTimeline {
   idString    String   @id @default(cuid())
-  content     String   @db.NVarChar(Max)
-  imageUrls   String   @db.NVarChar(Max) // JSON array
+  content     String
+  imageUrls   String   // JSON array
   createdAt   DateTime @default(now())
   
   caregiverId String
@@ -147,7 +148,7 @@ model SystemFieldDefinition {
   name        String   // Internal key, e.g., "zodiac"
   label       String   // Display label, e.g., "属相"
   type        String   // "TEXT", "NUMBER", "SELECT", "DATE"
-  options     String?  @db.NVarChar(Max) // JSON array for SELECT type
+  options     String?  // JSON array for SELECT type
   required    Boolean  @default(false)
   order       Int      @default(0)
   createdAt DateTime @default(now())
@@ -158,7 +159,7 @@ model SystemFieldDefinition {
 
 model SystemSettings {
   key         String   @id // e.g., "caregiver_field_config"
-  value       String   @db.NVarChar(Max) // Stores JSON structure
+  value       String   // Stores JSON structure
   description String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -171,7 +172,7 @@ model SalarySettlement {
   month       String   // Format "YYYY-MM"
   totalAmount Decimal  @db.Decimal(10, 2)
   status      String   @default("PENDING") // PENDING, PAID
-  details     String?  @db.NVarChar(Max) // JSON breakdown
+  details     String?  // JSON breakdown
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

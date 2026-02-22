@@ -88,6 +88,7 @@ export function SettlementDashboard() {
         orderCount: 0,
         status: record.status,
         existingSettlementId: record.id,
+        allOrdersSettled: true,
         items: []
     };
 

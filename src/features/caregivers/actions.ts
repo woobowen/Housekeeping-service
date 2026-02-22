@@ -128,7 +128,6 @@ export async function createCaregiver(
       ...restValidated,
       birthDate: dob ? new Date(dob) : null,
       // Mapping boolean and numbers from validated data
-      isTrainee: !!restValidated.isTrainee,
       height: restValidated.height || null,
       weight: restValidated.weight || null,
       experienceYears: restValidated.experienceYears || null,
@@ -186,7 +185,6 @@ export async function updateCaregiver(
       ...restValidated,
       // Ensure correct mapping
       birthDate: dob ? new Date(dob) : null,
-      isTrainee: !!restValidated.isTrainee,
       
       // JSON Storage Fields
       jobTypes: JSON.stringify(restValidated.jobTypes || []),
@@ -374,6 +372,7 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
         weight: caregiver.weight,
         experienceYears: caregiver.experienceYears,
         isTrainee: caregiver.isTrainee,
+        monthlySalary: caregiver.monthlySalary ? Number(caregiver.monthlySalary) : null,
         jobTypes: parseArray(caregiver.jobTypes),
         specialties: parseArray(caregiver.specialties),
         certificates: parseArray(caregiver.certificates),

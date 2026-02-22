@@ -28,7 +28,7 @@ export default async function CaregiverDetailPage(props: PageProps) {
   // Restore metadata object from JSON string for the UI component
   const caregiverWithMetadata = {
     ...serializedCaregiver,
-    metadata: caregiver.metadataJson ? JSON.parse(caregiver.metadataJson) : {},
+    metadata: {},
   };
 
   // Flatten sections for the detail view if needed, or pass as is

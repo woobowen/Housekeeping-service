@@ -18,7 +18,7 @@ const phoneRegex = /^1[3-9]\d{9}$/;
  * Localized Create Order Schema
  */
 const createOrderSchema = z.object({
-  caregiverId: z.string({ required_error: "请选择家政员" }).min(1, "请选择家政员"),
+  caregiverId: z.string({ message: "请选择家政员" }).min(1, "请选择家政员"),
   caregiverPhone: z.string().regex(phoneRegex, '请输入有效的11位家政员手机号'),
   clientName: z.string().min(1, '请输入客户姓名'),
   clientPhone: z.string().regex(phoneRegex, '请输入有效的11位客户手机号'),
@@ -30,23 +30,18 @@ const createOrderSchema = z.object({
 
   // Date validation refinement to prevent "Invalid input: expected date, received undefined"
   startDate: z.coerce.date({ 
-    required_error: "请选择开始日期", 
-    invalid_type_error: "开始日期格式无效" 
+    message: "请选择开始日期"
   }).refine(val => !!val, { message: "请选择开始日期" }),
   
   endDate: z.coerce.date({ 
-    required_error: "请选择结束日期", 
-    invalid_type_error: "结束日期格式无效" 
+    message: "请选择结束日期"
   }).refine(val => !!val, { message: "请选择结束日期" }),
 
-  serviceDate: z.coerce.date({ 
-    invalid_type_error: "服务日期格式错误" 
-  }).optional().nullable(),
+  serviceDate: z.coerce.date().optional().nullable(),
 
-  status: z.string({ required_error: "请选择订单状态" }).min(1, "请选择订单状态").default("PENDING"),
+  status: z.string({ message: "请选择订单状态" }).min(1, "请选择订单状态").default("PENDING"),
   totalAmount: z.coerce.number({ 
-    required_error: "请输入订单金额", 
-    invalid_type_error: "订单金额必须是数字" 
+    message: "请输入订单金额"
   }).min(0, "订单金额不能为负数"),
   
   clientLocation: z.string().min(1, '请输入客户区域'),
@@ -66,9 +61,9 @@ const createOrderSchema = z.object({
 const adjustmentSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式 must be YYYY-MM-DD (例如: 2024-01-01)'),
   type: z.enum(['OVERTIME', 'LEAVE', 'SUBSTITUTE'], { 
-    errorMap: () => ({ message: '调整类型必须是: 加班、请假 或 替班' }) 
+    message: '调整类型必须是: 加班、请假 或 替班' 
   }),
-  value: z.number({ invalid_type_error: '天数必须是数字' }).describe('变动天数，如 +0.5, -1'),
+  value: z.number().describe('变动天数，如 +0.5, -1'),
   substituteId: z.string().optional().describe('接替人员的工号/ID'),
   remarks: z.string().optional(),
 });

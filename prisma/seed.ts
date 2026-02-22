@@ -8,7 +8,6 @@ import {
   COOKING_SKILLS,
   WORK_STATUS,
   EDUCATION_LEVELS,
-  LIVE_IN_STATUS,
 } from '../src/config/constants';
 
 const prisma = new PrismaClient();
@@ -71,7 +70,6 @@ async function main() {
         
         // Professional Info
         workExpLevel: workExpLevel,
-        liveInStatus: pickOne(LIVE_IN_STATUS),
         salaryRequirements: salary,
         monthlySalary: salary,
         
@@ -88,7 +86,7 @@ async function main() {
         idCardBackUrl: null,
         
         notes: faker.lorem.sentence(),
-        metadata: JSON.stringify({
+        customData: JSON.stringify({
           rating: faker.number.float({ min: 3.5, max: 5.0, fractionDigits: 1 }),
           internalNotes: faker.lorem.sentence(),
           customTags: faker.helpers.arrayElements(['推荐', '高素质', '性格好', '有爱心'], { min: 0, max: 2 })

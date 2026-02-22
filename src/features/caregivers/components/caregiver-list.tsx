@@ -26,6 +26,7 @@ interface Caregiver {
   weight: number | null;
   experienceYears: number | null;
   isTrainee: boolean;
+  monthlySalary: number | null;
   jobTypes: string[];
   specialties: string[];
   certificates: string[];
@@ -84,7 +85,7 @@ export function CaregiverList({ data }: CaregiverListProps) {
           item.isTrainee ? '是' : '否',
           item.phone,
           item.idCardNumber,
-          item.salaryRequirements,
+          item.monthlySalary ? item.monthlySalary.toString() : '',
           item.dob ? new Date(item.dob).toLocaleDateString('zh-CN') : '',
           item.gender === 'MALE' ? '男' : item.gender === 'FEMALE' ? '女' : '未知',
           item.experienceYears ? `${item.experienceYears}年` : '',

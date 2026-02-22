@@ -121,7 +121,12 @@ export default async function CaregiversPage(props: PageProps) {
 
       <ComprehensiveFilter />
 
-      <CaregiverList data={data || []} />
+      <CaregiverList 
+        data={(data || []).map(item => ({
+          ...item,
+          idCardNumber: item.idCardNumber || "",
+        })) as any} 
+      />
       
       {/* Pagination Controls */}
       <div className="flex justify-center gap-2 mt-12 pb-8">

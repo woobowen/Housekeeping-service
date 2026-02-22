@@ -53,9 +53,9 @@ export const orderFormSchema = z.object({
   clientLocation: z.string().optional(),
   dispatcherName: z.string().min(1, '请输入派单员姓名'),
   dispatcherPhone: z.string().regex(phoneRegex, '请输入有效的11位手机号'),
-  managementFee: z.coerce.number().min(0, '管理费不能为负数'),
-  startDate: z.date({ required_error: '请选择开始日期' }),
-  endDate: z.date({ required_error: '请选择结束日期' }),
+  managementFee: z.coerce.number().min(0, "管理费不能为负数"),
+  startDate: z.date({ message: '请选择开始日期' }),
+  endDate: z.date({ message: '请选择结束日期' }),
   totalAmount: z.coerce.number().optional(),
   status: z.string().default('PENDING'),
   remarks: z.string().optional(),
@@ -76,7 +76,7 @@ export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单
   const lastDateUpdate = useRef<'startDate' | 'endDate' | 'duration' | null>(null);
 
   const form = useForm<OrderFormValues>({
-    resolver: zodResolver(orderFormSchema),
+    resolver: zodResolver(orderFormSchema) as any,
     defaultValues: {
       caregiverId: defaultValues?.caregiverId ?? '',
       caregiverName: defaultValues?.caregiverName ?? '',
@@ -137,7 +137,7 @@ export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单
     if (!watchedStartDate) return;
 
     if (lastDateUpdate.current === 'startDate' || lastDateUpdate.current === 'duration') {
-      if (watchedDurationDays > 0) {
+      if (watchedDurationDays !== undefined && watchedDurationDays > 0) {
         const newEndDate = addDays(watchedStartDate, watchedDurationDays - 1);
         if (!watchedEndDate || watchedEndDate.getTime() !== newEndDate.getTime()) {
           setValue('endDate', newEndDate);

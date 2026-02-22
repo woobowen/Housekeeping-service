@@ -70,9 +70,6 @@ export default async function EditCaregiverPage(props: PageProps) {
     <div className="py-6">
       <CaregiverForm 
         initialData={initialData}
-        caregiverJson={JSON.stringify(initialData)} 
-        metadataJson={(caregiver as any).metadataJson}
-        key={id + ((caregiver as any).metadataJson || 'loading')} 
       />
     </div>
   );

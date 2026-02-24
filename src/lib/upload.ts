@@ -1,6 +1,12 @@
-import { writeFile, mkdir } from 'node:fs/promises';
-import { join, extname } from 'node:path';
+import { createClient } from '@supabase/supabase-js';
+import { extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+
+// 初始化 Supabase 客户端 (Initialize Supabase client)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function saveLocalFile(
   file: File,
@@ -11,25 +17,39 @@ export async function saveLocalFile(
       return null;
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const uploadDir = join(process.cwd(), 'public', folder);
+    // 获取文件 buffer (Extract file buffer)
+    const arrayBuffer = await file.arrayBuffer();
 
-    // Ensure directory exists
-    await mkdir(uploadDir, { recursive: true });
-
-    // Generate unique filename
-    // Sanitize extension or fallback
+    // 生成唯一文件名 (Generate unique filename)
     const ext = extname(file.name) || '.jpg'; 
     const filename = `${randomUUID()}${ext}`;
-    const filePath = join(uploadDir, filename);
+    
+    // 构建在云端存储的路径 (Path within the storage bucket)
+    const filePath = `${folder}/${filename}`;
 
-    // Write file
-    await writeFile(filePath, buffer);
+    // 利用 @supabase/supabase-js 直接将文件上传至名为 'caregivers' 的云存储桶
+    // Upload the file buffer directly to a Supabase Storage bucket named `caregivers`
+    const { error } = await supabase.storage
+      .from('caregivers')
+      .upload(filePath, arrayBuffer, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false // 不覆盖已存在的文件
+      });
 
-    // Return web path
-    return `/${folder}/${filename}`;
+    if (error) {
+      console.error('上传图片至 Supabase 失败 (Error saving file to Supabase):', error);
+      return null;
+    }
+
+    // 通过 getPublicUrl 生成并返回公共网络访问 URL
+    // Return the public URL of the uploaded image
+    const { data } = supabase.storage
+      .from('caregivers')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
   } catch (error) {
-    console.error('Error saving local file:', error);
+    console.error('上传图片至 Supabase 发生异常 (Exception saving file to Supabase):', error);
     return null;
   }
 }

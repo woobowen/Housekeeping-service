@@ -7,21 +7,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [state, action, isPending] = useActionState(login, null);
-  const router = useRouter();
 
   useEffect(() => {
     if (state?.success) {
       toast.success('登录成功');
-      router.push('/caregivers'); // Redirect to dashboard
-      router.refresh(); // Ensure middleware re-runs/cookies are picked up
+      window.location.href = '/caregivers';
     } else if (state?.error) {
       toast.error(state.error);
     }
-  }, [state, router]);
+  }, [state]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">

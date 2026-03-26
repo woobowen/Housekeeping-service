@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { deleteCaregiver } from "@/features/caregivers/actions";
+import { useRouter } from "next/navigation";
 
 interface DeleteCaregiverButtonProps {
   id: string;
@@ -25,12 +26,19 @@ interface DeleteCaregiverButtonProps {
 export function DeleteCaregiverButton({ id }: DeleteCaregiverButtonProps) {
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const handleDelete = () => {
     startTransition(async () => {
       const result = await deleteCaregiver(id);
-      
-      // If we get here, it means no redirect happened (which implies error or logic issue if success uses redirect)
+
+      if (result?.success) {
+        setOpen(false);
+        router.push('/caregivers');
+        router.refresh();
+        return;
+      }
+
       if (result && !result.success) {
         toast.error(result.message || "删除失败");
         setOpen(false); 

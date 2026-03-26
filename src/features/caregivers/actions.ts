@@ -1,7 +1,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { db } from '@/lib/prisma';
 import { caregiverFormSchema, type CaregiverFormValues } from './schema';
 import { type ActionState } from './types';
@@ -481,11 +480,34 @@ export async function getCaregiver(id: string) {
 
 export async function deleteCaregiver(id: string): Promise<ActionState> {
   try {
-    await db.caregiver.delete({ where: { idString: id } });
+    await db.$transaction(async (tx) => {
+      // 中文说明：护理员可能已经关联订单、结算单与时间线。
+      // 其中时间线表已配置 onDelete: Cascade，但订单与结算单没有，
+      // 因此这里显式先删子表，再删主表，避免外键约束导致删除失败。
+      await tx.salarySettlement.deleteMany({
+        where: { caregiverId: id },
+      });
+
+      await tx.order.deleteMany({
+        where: { caregiverId: id },
+      });
+
+      await tx.caregiver.delete({
+        where: { idString: id },
+      });
+    });
+
     revalidatePath('/caregivers');
+    revalidatePath('/orders');
+    revalidatePath('/salary-settlement');
     return { success: true, message: '护理员删除成功' };
   } catch (error) {
     console.error('Failed to delete caregiver:', error);
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      return { success: false, message: `删除失败：${error.code}` };
+    }
+
     return { success: false, message: '删除失败，请稍后重试' };
   }
 }

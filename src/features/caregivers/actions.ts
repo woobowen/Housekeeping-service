@@ -109,7 +109,7 @@ async function processFormData(formData: FormData): Promise<Partial<CaregiverFor
 export async function createCaregiver(
   prevState: any,
   formData: FormData
-): Promise<ActionState> {
+): Promise<ActionState<{ idString: string }>> {
   const data = await processFormData(formData);
   const validatedFields = caregiverFormSchema.safeParse(data);
 
@@ -145,12 +145,16 @@ export async function createCaregiver(
       level: 'TRAINEE',
     };
 
-    await db.caregiver.create({
+    const createdCaregiver = await db.caregiver.create({
       data: prismaData,
     });
 
     revalidatePath('/caregivers');
-    return { success: true, message: '护理员创建成功' };
+    return {
+      success: true,
+      message: '护理员创建成功',
+      data: { idString: createdCaregiver.idString },
+    };
   } catch (error) {
     console.error('Failed to create caregiver:', error);
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -163,7 +167,7 @@ export async function createCaregiver(
 export async function updateCaregiver(
   prevState: any,
   formData: FormData
-): Promise<ActionState> {
+): Promise<ActionState<{ idString: string }>> {
   const id = formData.get('idString') as string;
   if (!id) return { success: false, message: 'ID不能为空' };
 
@@ -196,14 +200,18 @@ export async function updateCaregiver(
       lifeImages: JSON.stringify(restValidated.lifeImages || []),
     };
 
-    await db.caregiver.update({
+    const updatedCaregiver = await db.caregiver.update({
       where: { idString: id },
       data: prismaUpdateData,
     });
 
     revalidatePath('/caregivers');
     revalidatePath(`/caregivers/${id}`);
-    return { success: true, message: '护理员更新成功' };
+    return {
+      success: true,
+      message: '护理员更新成功',
+      data: { idString: updatedCaregiver.idString },
+    };
   } catch (error) {
     console.error('Failed to update caregiver:', error);
     return { success: false, message: '更新失败，请稍后重试' };
@@ -407,6 +415,37 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
       pagination: { current: 1, pageSize: 9, total: 0, totalPages: 0 },
     };
   }
+}
+
+export interface CaregiverOption {
+  idString: string;
+  workerId: string;
+  name: string;
+  phone: string;
+  status: string;
+  monthlySalary: number | null;
+}
+
+export async function getCaregiverOptions(): Promise<CaregiverOption[]> {
+  const caregivers = await db.caregiver.findMany({
+    orderBy: [
+      { status: 'asc' },
+      { createdAt: 'desc' },
+    ],
+    select: {
+      idString: true,
+      workerId: true,
+      name: true,
+      phone: true,
+      status: true,
+      monthlySalary: true,
+    },
+  });
+
+  return caregivers.map((item) => ({
+    ...item,
+    monthlySalary: item.monthlySalary ? Number(item.monthlySalary) : null,
+  }));
 }
 
 export async function getCaregiver(id: string) {

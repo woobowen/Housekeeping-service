@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useTransition } from 'react';
+import { useState, useMemo, useTransition, useEffect } from 'react';
 import { toast } from 'sonner';
 import { 
   Calculator, 
@@ -27,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { settleOrder } from '../actions';
+import { useRouter } from 'next/navigation';
 
 interface SettleOrderModalProps {
   order: any;
@@ -36,6 +37,7 @@ interface SettleOrderModalProps {
 
 export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModalProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const currentMonth = format(new Date(), 'yyyy-MM');
   
   // Detection for Cross-Month
@@ -56,10 +58,18 @@ export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModal
     return diff > 0 ? diff : 0;
   }, [order]);
 
-  // Default to expected duration (or expected in month if cross), but allow edit
-  const [actualDays, setActualDays] = useState<string>(
-    String(isCrossMonth ? expectedDaysInMonth : (order?.durationDays || 0))
-  );
+  // 中文说明：弹窗复用同一个组件实例时，默认天数必须随当前订单实时重算，
+  // 否则会沿用上一次打开时的旧 state，导致出现错误的 0 天默认值。
+  const [actualDays, setActualDays] = useState<string>('0');
+
+  useEffect(() => {
+    if (!order || !open) {
+      return;
+    }
+
+    const nextDefaultDays = isCrossMonth ? expectedDaysInMonth : (order.durationDays || 0);
+    setActualDays(String(nextDefaultDays > 0 ? nextDefaultDays : 0));
+  }, [expectedDaysInMonth, isCrossMonth, open, order]);
 
   if (!order) return null;
 
@@ -82,6 +92,7 @@ export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModal
       const result = await settleOrder(order.id, daysNum, totalAmount, currentMonth);
       if (result.success) {
         toast.success(isCrossMonth ? '本月部分结算成功' : '订单结算成功，家政员已释放');
+        router.refresh();
         onOpenChange(false);
       } else {
         toast.error('结算失败', { description: result.message });

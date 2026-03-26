@@ -1,4 +1,5 @@
 import { getOrders } from '@/features/orders/actions';
+import { getCaregiverOptions } from '@/features/caregivers/actions';
 import { OrderActionHandler } from '@/features/orders/components/order-action-handler';
 import { OrderList } from '@/features/orders/components/order-list';
 
@@ -6,6 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function OrdersPage() {
   const orders = (await getOrders()) || [];
+  const caregiverOptions = await getCaregiverOptions();
 
   return (
     <div className="space-y-6 p-6">
@@ -17,11 +19,11 @@ export default async function OrdersPage() {
           </p>
         </div>
         <div>
-          <OrderActionHandler />
+          <OrderActionHandler caregiverOptions={caregiverOptions} />
         </div>
       </div>
 
-      <OrderList orders={orders} />
+      <OrderList orders={orders} caregiverOptions={caregiverOptions} />
     </div>
   );
 }

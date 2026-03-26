@@ -14,7 +14,7 @@ export default function LoginPage() {
   useEffect(() => {
     if (state?.success) {
       toast.success('登录成功');
-      window.location.href = '/caregivers';
+      window.location.href = '/';
     } else if (state?.error) {
       toast.error(state.error);
     }

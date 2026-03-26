@@ -43,6 +43,7 @@ import { createCaregiver, updateCaregiver } from '../actions';
 import { getGlobalFieldConfig } from '@/features/system/actions';
 import { DynamicFieldRenderer, type FieldDefinition } from '../../settings/components/dynamic-field-renderer';
 import { CAREGIVER_OPTIONS } from '@/constants/caregiver-options';
+import type { ActionState } from '../types';
 
 import {
   caregiverFormSchema,
@@ -162,11 +163,11 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    if (fieldName === 'avatarUrl') {
+    if (fieldName === 'avatarUrl' || fieldName === 'idCardFrontUrl' || fieldName === 'idCardBackUrl') {
       const file = files[0];
       const url = URL.createObjectURL(file);
       setFilesMap(prev => ({ ...prev, [url]: file }));
-      form.setValue('avatarUrl', url);
+      form.setValue(fieldName, url as any);
       return;
     }
 
@@ -241,14 +242,15 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
           return;
         }
 
-        if (key === 'avatarUrl') {
+        if (key === 'avatarUrl' || key === 'idCardFrontUrl' || key === 'idCardBackUrl') {
           const url = value as string;
           if (url.startsWith('blob:')) {
             const file = filesMap[url];
-            if (file) formData.append('avatarFile', file);
-            formData.append('avatarUrl', ''); // Backend will handle the file
+            const fileKey = key.replace('Url', 'File');
+            if (file) formData.append(fileKey, file);
+            formData.append(key, ''); // Backend will handle the file
           } else {
-            formData.append('avatarUrl', url);
+            formData.append(key, url);
           }
           return;
         }
@@ -266,13 +268,14 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
       
       formData.append('customData', JSON.stringify(customValues));
 
-      const result = isEdit 
+      const result: ActionState<{ idString: string }> = isEdit 
         ? await updateCaregiver(null, formData)
         : await createCaregiver(null, formData);
 
       if (result.success) {
         toast.success(result.message);
-        router.push('/caregivers');
+        const targetId = result.data?.idString || initialData?.idString;
+        router.push(targetId ? `/caregivers/${targetId}` : '/caregivers');
         router.refresh();
       } else {
         toast.error(result.message || '操作失败');
@@ -348,6 +351,12 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                   )}
                 </div>
               </div>
+
+              {isPending && (
+                <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                  图片与证件正在上传到云端，请不要关闭页面。
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <FormField control={form.control} name="workerId" render={({ field }) => (
@@ -430,6 +439,48 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
 
             {/* Step 4: Files and Photos */}
             <div className={cn(currentStep === 3 ? "space-y-8" : "hidden")}>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="space-y-3">
+                   <FormLabel>身份证正面</FormLabel>
+                   <div className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-slate-300 overflow-hidden group hover:border-primary transition-colors bg-white">
+                     {form.watch('idCardFrontUrl') ? (
+                       <>
+                         <img src={form.watch('idCardFrontUrl')!} className="w-full h-full object-cover" alt="身份证正面" />
+                         <button type="button" onClick={() => removeImage('idCardFrontUrl', 0)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Trash2 className="w-6 h-6 text-white" />
+                         </button>
+                       </>
+                     ) : (
+                       <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                         <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                         <span className="text-xs text-slate-500">上传身份证正面</span>
+                         <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'idCardFrontUrl')} />
+                       </label>
+                     )}
+                   </div>
+                 </div>
+
+                 <div className="space-y-3">
+                   <FormLabel>身份证反面</FormLabel>
+                   <div className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-slate-300 overflow-hidden group hover:border-primary transition-colors bg-white">
+                     {form.watch('idCardBackUrl') ? (
+                       <>
+                         <img src={form.watch('idCardBackUrl')!} className="w-full h-full object-cover" alt="身份证反面" />
+                         <button type="button" onClick={() => removeImage('idCardBackUrl', 0)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                           <Trash2 className="w-6 h-6 text-white" />
+                         </button>
+                       </>
+                     ) : (
+                       <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                         <Upload className="w-8 h-8 text-slate-400 mb-2" />
+                         <span className="text-xs text-slate-500">上传身份证反面</span>
+                         <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'idCardBackUrl')} />
+                       </label>
+                     )}
+                   </div>
+                 </div>
+               </div>
+
                <div className="space-y-4">
                  <FormLabel>健康证/体检表</FormLabel>
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

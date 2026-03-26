@@ -28,18 +28,24 @@ import { DeleteOrderButton } from './delete-order-button';
 import { getOrders } from '../actions';
 import { DatePicker } from '@/components/ui/date-picker';
 import { X } from 'lucide-react';
+import type { CaregiverOption } from '@/features/caregivers/actions';
 
 interface OrderListProps {
   orders?: any[];
+  caregiverOptions?: CaregiverOption[];
 }
 
-export function OrderList({ orders: initialOrders = [] }: OrderListProps) {
+export function OrderList({ orders: initialOrders = [], caregiverOptions = [] }: OrderListProps) {
   const [orders, setOrders] = useState(initialOrders || []);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [settlingOrder, setSettlingOrder] = useState<any>(null);
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState('caregiver');
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setOrders(initialOrders || []);
+  }, [initialOrders]);
 
   const handleSearch = () => {
     startTransition(async () => {
@@ -206,7 +212,8 @@ export function OrderList({ orders: initialOrders = [] }: OrderListProps) {
       <EditOrderModal 
         open={!!editingOrder} 
         onOpenChange={(open) => !open && setEditingOrder(null)} 
-        order={editingOrder} 
+        order={editingOrder}
+        caregiverOptions={caregiverOptions}
       />
 
       <SettleOrderModal

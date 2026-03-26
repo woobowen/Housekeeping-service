@@ -40,6 +40,7 @@ interface CaregiverDetailProps {
 }
 
 export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProps) {
+  const idCardImages = [data.idCardFrontUrl, data.idCardBackUrl].filter(Boolean);
   const customDataMap = useMemo(() => {
     if (!data.customData) return {};
     try {
@@ -230,6 +231,12 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
 
           {/* Gallery for Health Certs and Photos */}
           <Card className="border-slate-200 shadow-sm p-8 space-y-10">
+             {idCardImages.length > 0 && (
+               <>
+                 {renderGallery('身份证照片', idCardImages)}
+                 <Separator className="bg-slate-100" />
+               </>
+             )}
              {renderGallery('健康证 / 体检表', data.healthCertImages)}
              <Separator className="bg-slate-100" />
              {renderGallery('照片风采展示', data.lifeImages)}

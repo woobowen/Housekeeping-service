@@ -12,14 +12,16 @@ import {
 } from '@/components/ui/dialog';
 import { OrderForm, type OrderFormValues } from './order-form';
 import { updateOrder } from '../actions';
+import type { CaregiverOption } from '@/features/caregivers/actions';
 
 interface EditOrderModalProps {
   order: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  caregiverOptions?: CaregiverOption[];
 }
 
-export function EditOrderModal({ order, open, onOpenChange }: EditOrderModalProps) {
+export function EditOrderModal({ order, open, onOpenChange, caregiverOptions = [] }: EditOrderModalProps) {
   if (!order) return null;
 
   const handleSubmit = async (values: OrderFormValues) => {
@@ -67,6 +69,7 @@ export function EditOrderModal({ order, open, onOpenChange }: EditOrderModalProp
 
         <div className="p-6">
           <OrderForm 
+            caregiverOptions={caregiverOptions}
             defaultValues={defaultValues} 
             onSubmit={async () => {}} 
             submitLabel="保存修改" 

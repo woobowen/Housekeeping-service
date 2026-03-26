@@ -1,6 +1,7 @@
 'use client';
 
 import { CircleDollarSign } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
 import {
@@ -12,14 +13,18 @@ import {
 } from '@/components/ui/dialog';
 import { OrderForm, type OrderFormValues } from './order-form';
 import { createOrder } from '../actions';
+import type { CaregiverOption } from '@/features/caregivers/actions';
 
 interface CreateOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  caregiverOptions: CaregiverOption[];
   initialData?: any;
 }
 
-export function CreateOrderModal({ open, onOpenChange, initialData }: CreateOrderModalProps) {
+export function CreateOrderModal({ open, onOpenChange, initialData, caregiverOptions }: CreateOrderModalProps) {
+  const router = useRouter();
+
   const handleSubmit = async (values: OrderFormValues) => {
     // Derive effective daily salary for persistence
     const effectiveDaily = values.dailySalary || (values.monthlySalary ? values.monthlySalary / 26 : 0);
@@ -33,9 +38,13 @@ export function CreateOrderModal({ open, onOpenChange, initialData }: CreateOrde
     
     if (result.success) {
       toast.success('订单创建成功');
+      router.refresh();
       onOpenChange(false);
     } else {
-      toast.error('创建失败', { description: result.message });
+      const friendlyMessage = result.message?.includes('派单失败')
+        ? result.message
+        : (result.message || '请检查订单日期、阿姨选择和必填字段后重试');
+      toast.error('创建失败', { description: friendlyMessage });
     }
   };
 
@@ -54,6 +63,7 @@ export function CreateOrderModal({ open, onOpenChange, initialData }: CreateOrde
 
         <div className="p-6">
           <OrderForm 
+            caregiverOptions={caregiverOptions}
             defaultValues={initialData} 
             onSubmit={handleSubmit} 
             submitLabel="提交正式订单" 

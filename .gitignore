@@ -5,3 +5,6 @@ coverage
 .DS_Store
 
 .next/
+playwright-report/
+test-results/
+tests/e2e/artifacts/

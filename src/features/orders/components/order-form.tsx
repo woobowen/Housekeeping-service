@@ -38,6 +38,7 @@ import {
 
 import { useRouter } from 'next/navigation';
 import { createOrder, updateOrder } from '../actions';
+import type { CaregiverOption } from '@/features/caregivers/actions';
 
 const phoneRegex = /^1[3-9]\d{9}$/;
 
@@ -59,18 +60,28 @@ export const orderFormSchema = z.object({
   totalAmount: z.coerce.number().optional(),
   status: z.string().default('PENDING'),
   remarks: z.string().optional(),
+}).refine((values) => values.endDate >= values.startDate, {
+  message: '结束日期不能早于开始日期',
+  path: ['endDate'],
 });
 
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
 
 interface OrderFormProps {
   defaultValues?: Partial<OrderFormValues> & { id?: string };
+  caregiverOptions?: CaregiverOption[];
   onSubmit: (values: OrderFormValues) => Promise<void>;
   submitLabel?: string;
   onSuccess?: () => void;
 }
 
-export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单', onSuccess }: OrderFormProps) {
+export function OrderForm({
+  defaultValues,
+  caregiverOptions = [],
+  onSubmit,
+  submitLabel = '提交订单',
+  onSuccess,
+}: OrderFormProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const lastDateUpdate = useRef<'startDate' | 'endDate' | 'duration' | null>(null);
@@ -131,6 +142,23 @@ export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单
   const watchedMonthlySalary = useWatch({ control, name: 'monthlySalary' });
   const watchedDailySalary = useWatch({ control, name: 'dailySalary' });
   const watchedManagementFee = useWatch({ control, name: 'managementFee' });
+  const watchedCaregiverId = useWatch({ control, name: 'caregiverId' });
+
+  useEffect(() => {
+    if (!watchedCaregiverId) return;
+    const selectedCaregiver = caregiverOptions.find((item) => item.idString === watchedCaregiverId);
+    if (!selectedCaregiver) return;
+
+    // 中文说明：选择阿姨后自动回填关键字段，减少管理员重复录入与输错概率。
+    setValue('caregiverName', selectedCaregiver.name, { shouldValidate: true });
+    setValue('caregiverPhone', selectedCaregiver.phone, { shouldValidate: true });
+
+    const currentMonthlySalary = Number(form.getValues('monthlySalary') || 0);
+    const currentDailySalary = Number(form.getValues('dailySalary') || 0);
+    if (!currentMonthlySalary && !currentDailySalary && selectedCaregiver.monthlySalary) {
+      setValue('monthlySalary', selectedCaregiver.monthlySalary, { shouldValidate: true });
+    }
+  }, [caregiverOptions, form, setValue, watchedCaregiverId]);
 
   // Date linkage
   useEffect(() => {
@@ -205,16 +233,46 @@ export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单
             </div>
             <FormField
               control={form.control}
+              name="caregiverId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>选择阿姨 *</FormLabel>
+                  <Select
+                    value={field.value || ''}
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="按姓名 / 工号选择阿姨" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {caregiverOptions.map((caregiver) => (
+                        <SelectItem key={caregiver.idString} value={caregiver.idString}>
+                          {caregiver.name} / {caregiver.workerId} / {caregiver.phone}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    若阿姨正在忙碌，仍可查看，但派单时系统会在提交阶段做冲突校验。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="caregiverName"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>姓名 *</FormLabel>
                   <FormControl>
-                    <Input {...field} className="bg-white" onChange={(e) => {
-                      field.onChange(e.target.value);
-                      form.setValue('caregiverId', e.target.value);
-                    }} />
+                    <Input {...field} className="bg-white" readOnly />
                   </FormControl>
+                  <FormDescription>系统会在选择阿姨后自动回填，通常无需手工修改。</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -297,6 +355,14 @@ export function OrderForm({ defaultValues, onSubmit, submitLabel = '提交订单
                 <FormMessage />
               </FormItem>
             )} />
+          </div>
+          {watchedEndDate && watchedStartDate && watchedEndDate < watchedStartDate && (
+            <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+              日期有误：结束日期不能早于开始日期，请重新选择服务周期。
+            </div>
+          )}
+          <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+            档期冲突会在提交时做最终校验。如阿姨在所选日期已有订单，系统会返回明确的中文提示。
           </div>
         </div>
 

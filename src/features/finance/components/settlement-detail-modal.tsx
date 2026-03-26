@@ -33,7 +33,7 @@ interface SettlementDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: SettlementDetail | null;
-  onSuccess?: () => void;
+  onSuccess?: (payload: { mode: 'create' | 'update'; data: SettlementDetail }) => void;
 }
 
 export function SettlementDetailModal({ 
@@ -57,7 +57,12 @@ export function SettlementDetailModal({
       if (res.success) {
         toast.success(isUpdate ? '结算单已更新' : '结算单已生成');
         onOpenChange(false);
-        if (onSuccess) onSuccess();
+        if (onSuccess) {
+          onSuccess({
+            mode: isUpdate ? 'update' : 'create',
+            data,
+          });
+        }
       } else {
         toast.error(res.message || '操作失败');
       }

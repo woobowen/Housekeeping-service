@@ -44,6 +44,10 @@ export default async function CaregiverDetailPage(props: PageProps) {
         data={caregiverWithMetadata as any} 
         systemFields={dynamicFields as any}
       />
+      <TimelineSection
+        caregiverId={id}
+        initialItems={sanitizeData(timelineItems) as any}
+      />
     </div>
   );
 }

@@ -50,6 +50,7 @@ export function SettlementDashboard() {
   const [isPending, startTransition] = useTransition();
   const [selectedDetail, setSelectedDetail] = useState<SettlementDetail | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [receiptMessage, setReceiptMessage] = useState('');
 
   const fetchData = () => {
     startTransition(async () => {
@@ -107,8 +108,29 @@ export function SettlementDashboard() {
     setIsModalOpen(true);
   };
 
+  const pendingTotalAmount = candidates.reduce((sum, item) => sum + item.totalAmount, 0);
+  const crossMonthCount = candidates.reduce(
+    (sum, item) => sum + item.items.filter((orderItem) => orderItem.settlementType === 'PARTIAL').length,
+    0
+  );
+  const allSettledCandidateCount = candidates.filter((item) => item.allOrdersSettled).length;
+
   return (
     <div className="space-y-6">
+      {receiptMessage && (
+        <Card className="border-green-200 bg-green-50 shadow-sm">
+          <CardContent className="flex items-center justify-between gap-4 py-4">
+            <div>
+              <div className="text-sm font-bold text-green-800">财务回执</div>
+              <div className="text-sm text-green-700">{receiptMessage}</div>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setReceiptMessage('')}>
+              关闭
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Search Header */}
       <Card className="border-slate-200 shadow-sm">
         <CardHeader className="pb-4">
@@ -133,6 +155,29 @@ export function SettlementDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          title="本月待结总额"
+          value={`¥ ${pendingTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+          description="候选结算列表中当前待处理的总金额。"
+        />
+        <SummaryCard
+          title="本月待结人数"
+          value={`${candidates.length} 人`}
+          description="本月存在有效订单交集、仍需关注结算的阿姨人数。"
+        />
+        <SummaryCard
+          title="可直接生成结算单"
+          value={`${allSettledCandidateCount} 人`}
+          description="其关联订单均已完成结单，可直接进入结算确认。"
+        />
+        <SummaryCard
+          title="跨月订单数量"
+          value={`${crossMonthCount} 单`}
+          description="涉及部分结算的跨月订单，月底发薪时应重点复核。"
+        />
+      </div>
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="pending" className="w-full">
@@ -310,8 +355,39 @@ export function SettlementDashboard() {
         open={isModalOpen}
         onOpenChange={setIsModalOpen}
         data={selectedDetail}
-        onSuccess={fetchData}
+        onSuccess={({ mode, data }) => {
+          setReceiptMessage(
+            `${data.caregiverName} ${data.month} 的结算单已${mode === 'update' ? '更新' : '生成'}，金额 ¥ ${data.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}。`
+          );
+          fetchData();
+        }}
       />
     </div>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string;
+  description: string;
+}) {
+  return (
+    <Card className="border-slate-200 shadow-sm">
+      <CardHeader className="pb-3">
+        <CardDescription className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          {title}
+        </CardDescription>
+        <CardTitle className="text-3xl font-black tracking-tight text-slate-900">
+          {value}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="text-sm leading-6 text-slate-600">
+        {description}
+      </CardContent>
+    </Card>
   );
 }

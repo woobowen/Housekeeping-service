@@ -5,8 +5,13 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { CreateOrderModal } from './create-order-modal';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
+import type { CaregiverOption } from '@/features/caregivers/actions';
 
-function OrderActionHandlerContent() {
+interface OrderActionHandlerProps {
+  caregiverOptions: CaregiverOption[];
+}
+
+function OrderActionHandlerContent({ caregiverOptions }: OrderActionHandlerProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -40,6 +45,7 @@ function OrderActionHandlerContent() {
       <CreateOrderModal 
         open={open} 
         onOpenChange={handleOpenChange} 
+        caregiverOptions={caregiverOptions}
         initialData={{
             caregiverId: caregiverId || '',
             caregiverName: caregiverName || caregiverId || '',
@@ -50,10 +56,10 @@ function OrderActionHandlerContent() {
   );
 }
 
-export function OrderActionHandler() {
+export function OrderActionHandler({ caregiverOptions }: OrderActionHandlerProps) {
     return (
         <Suspense fallback={<Button disabled><Plus className="mr-2 h-4 w-4" />新建订单</Button>}>
-            <OrderActionHandlerContent />
+            <OrderActionHandlerContent caregiverOptions={caregiverOptions} />
         </Suspense>
     );
 }

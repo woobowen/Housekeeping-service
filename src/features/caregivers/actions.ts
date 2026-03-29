@@ -3,12 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/prisma';
 import { caregiverFormSchema, type CaregiverFormValues } from './schema';
-import { type ActionState } from './types';
+import { type ActionState, type CaregiverListItem, type CaregiverDetailData } from './types';
 import { Prisma } from '@prisma/client';
 import { saveFile } from '@/lib/file-storage';
+import { requireAdminSession } from '@/lib/auth/session';
 
 // Helper: Parse potential JSON strings from FormData
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseJsonEntry<T>(value: FormDataEntryValue | null, defaultValue: T): T {
   if (typeof value === 'string' && value.length > 0) {
     try {
@@ -20,25 +20,87 @@ function parseJsonEntry<T>(value: FormDataEntryValue | null, defaultValue: T): T
   return defaultValue;
 }
 
+type CaregiverJsonArrayField = 'jobTypes' | 'specialties' | 'certificates' | 'cookingSkills';
+
+async function uploadFiles(files: File[], folder: string): Promise<string[]> {
+  const uploadTasks: Promise<string>[] = files
+    .filter((file: File) => file.size > 0 && file.name)
+    .map((file: File) => saveFile(file, folder));
+
+  return Promise.all(uploadTasks);
+}
+
+function parseStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseCustomDataObject(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {};
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function buildJsonContainsCondition(
+  field: CaregiverJsonArrayField,
+  value: string,
+): Prisma.CaregiverWhereInput {
+  switch (field) {
+    case 'jobTypes':
+      return { jobTypes: { contains: value } };
+    case 'specialties':
+      return { specialties: { contains: value } };
+    case 'certificates':
+      return { certificates: { contains: value } };
+    case 'cookingSkills':
+      return { cookingSkills: { contains: value } };
+  }
+}
+
 // Helper: Process FormData into Schema-ready object
 async function processFormData(formData: FormData): Promise<Partial<CaregiverFormValues>> {
-  const rawData: Record<string, any> = {};
+  const rawData: Record<string, unknown> = {};
 
   // 1. Extract Single Files & Upload
   const singleFileKeys = ['avatarUrl', 'idCardFrontUrl', 'idCardBackUrl'];
-  for (const key of singleFileKeys) {
+  const singleFileEntries = await Promise.all(
+    singleFileKeys.map(async (key: string): Promise<[string, string] | null> => {
     // Check for direct file in the key or in a "File" suffixed key (e.g. avatarFile)
-    const file = formData.get(key);
-    const fileAlt = formData.get(key.replace('Url', 'File'));
+      const file = formData.get(key);
+      const fileAlt = formData.get(key.replace('Url', 'File'));
     
-    const targetFile = (file instanceof File && file.size > 0) ? file : 
-                       (fileAlt instanceof File && fileAlt.size > 0) ? fileAlt : null;
+      const targetFile = (file instanceof File && file.size > 0) ? file :
+        (fileAlt instanceof File && fileAlt.size > 0) ? fileAlt : null;
 
-    if (targetFile) {
-      const url = await saveFile(targetFile, 'caregivers');
-      if (url) rawData[key] = url;
-    } else if (typeof file === 'string' && file.length > 0) {
-      rawData[key] = file;
+      if (targetFile) {
+        const url = await saveFile(targetFile, 'caregivers');
+        return url ? [key, url] : null;
+      }
+
+      if (typeof file === 'string' && file.length > 0) {
+        return [key, file];
+      }
+
+      return null;
+    }),
+  );
+
+  for (const entry of singleFileEntries) {
+    if (entry) {
+      rawData[entry[0]] = entry[1];
     }
   }
 
@@ -80,15 +142,8 @@ async function processFormData(formData: FormData): Promise<Partial<CaregiverFor
     // New files are sent as individual entries with the same key but "Files" suffix
     // e.g. healthCertFiles, lifeFiles
     const fileKey = key.replace('Images', 'Files');
-    const newFiles = formData.getAll(fileKey);
-    
-    const uploadedUrls: string[] = [];
-    for (const file of newFiles) {
-      if (file instanceof File && file.size > 0) {
-        const url = await saveFile(file, 'caregivers');
-        if (url) uploadedUrls.push(url);
-      }
-    }
+    const newFiles = formData.getAll(fileKey).filter((file): file is File => file instanceof File);
+    const uploadedUrls: string[] = await uploadFiles(newFiles, 'caregivers');
     
     rawData[key] = [...existingUrls, ...uploadedUrls];
   }
@@ -102,13 +157,14 @@ async function processFormData(formData: FormData): Promise<Partial<CaregiverFor
     }
   }
 
-  return rawData;
+  return rawData as Partial<CaregiverFormValues>;
 }
 
 export async function createCaregiver(
-  prevState: any,
+  _prevState: unknown,
   formData: FormData
 ): Promise<ActionState<{ idString: string }>> {
+  await requireAdminSession();
   const data = await processFormData(formData);
   const validatedFields = caregiverFormSchema.safeParse(data);
 
@@ -164,9 +220,10 @@ export async function createCaregiver(
 }
 
 export async function updateCaregiver(
-  prevState: any,
+  _prevState: unknown,
   formData: FormData
 ): Promise<ActionState<{ idString: string }>> {
+  await requireAdminSession();
   const id = formData.get('idString') as string;
   if (!id) return { success: false, message: 'ID不能为空' };
 
@@ -243,6 +300,7 @@ export interface GetCaregiversParams {
 }
 
 export async function getCaregivers(params: GetCaregiversParams = {}) {
+  await requireAdminSession();
   const {
     page = 1,
     pageSize = 9,
@@ -265,7 +323,6 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
     maxExperience,
     isTrainee,
     status,
-    includeBusy = false,
   } = params;
 
   try {
@@ -274,9 +331,6 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
     // --- 1. Busy Caregiver Identification (Anti-Collision) ---
     // Simplified for now: just exclude confirmed orders overlapping today if needed, 
     // but usually handled by order-based search.
-    const busyCaregiverIds = new Set<string>();
-    // ... logic for busy caregivers if search dates provided ...
-
     // --- 2. Build Prisma Where Clause ---
     const where: Prisma.CaregiverWhereInput = {
       AND: [],
@@ -321,15 +375,15 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
     if (maxExperience !== undefined) andConditions.push({ experienceYears: { lte: maxExperience } });
 
     // Helper for JSON array filtering (AND/OR)
-    const addJsonFilter = (field: keyof Prisma.CaregiverWhereInput, items: string[] | undefined, mode: 'AND' | 'OR') => {
+    const addJsonFilter = (field: CaregiverJsonArrayField, items: string[] | undefined, mode: 'AND' | 'OR') => {
       if (!items || items.length === 0) return;
       if (mode === 'OR') {
         andConditions.push({
-          OR: items.map((t) => ({ [field]: { contains: t } })),
-        } as any);
+          OR: items.map((t) => buildJsonContainsCondition(field, t)),
+        });
       } else {
         items.forEach((t) => {
-          andConditions.push({ [field]: { contains: t } } as any);
+          andConditions.push(buildJsonContainsCondition(field, t));
         });
       }
     };
@@ -353,12 +407,7 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
     const totalPages = Math.ceil(total / pageSize);
 
     // --- 4. Data Transformation ---
-    const parseArray = (val: string | null) => {
-      if (!val) return [];
-      try { return JSON.parse(val); } catch { return []; }
-    };
-
-    const data = caregivers.map((caregiver) => {
+    const data: CaregiverListItem[] = caregivers.map((caregiver) => {
       let age = 0;
       if (caregiver.birthDate) {
         const diff = Date.now() - new Date(caregiver.birthDate).getTime();
@@ -380,19 +429,19 @@ export async function getCaregivers(params: GetCaregiversParams = {}) {
         experienceYears: caregiver.experienceYears,
         isTrainee: caregiver.isTrainee,
         monthlySalary: caregiver.monthlySalary ? Number(caregiver.monthlySalary) : null,
-        jobTypes: parseArray(caregiver.jobTypes),
-        specialties: parseArray(caregiver.specialties),
-        certificates: parseArray(caregiver.certificates),
-        cookingSkills: parseArray(caregiver.cookingSkills),
-        languages: parseArray(caregiver.languages),
+        jobTypes: parseStringArray(caregiver.jobTypes),
+        specialties: parseStringArray(caregiver.specialties),
+        certificates: parseStringArray(caregiver.certificates),
+        cookingSkills: parseStringArray(caregiver.cookingSkills),
+        languages: parseStringArray(caregiver.languages),
         status: caregiver.status,
         avatarUrl: caregiver.avatarUrl,
         liveInStatus: caregiver.isLiveIn,
         currentResidence: caregiver.currentResidence,
         residenceDetail: caregiver.residenceDetail,
-        idCardNumber: caregiver.idCardNumber,
+        idCardNumber: caregiver.idCardNumber ?? '',
         notes: caregiver.notes,
-        customData: caregiver.customData ? JSON.parse(caregiver.customData) : {},
+        customData: parseCustomDataObject(caregiver.customData),
       };
     });
 
@@ -426,6 +475,7 @@ export interface CaregiverOption {
 }
 
 export async function getCaregiverOptions(): Promise<CaregiverOption[]> {
+  await requireAdminSession();
   const caregivers = await db.caregiver.findMany({
     orderBy: [
       { status: 'asc' },
@@ -447,30 +497,26 @@ export async function getCaregiverOptions(): Promise<CaregiverOption[]> {
   }));
 }
 
-export async function getCaregiver(id: string) {
+export async function getCaregiver(id: string): Promise<CaregiverDetailData | null> {
   try {
+    await requireAdminSession();
     const caregiver = await db.caregiver.findUnique({
       where: { idString: id },
     });
 
     if (!caregiver) return null;
 
-    const parseArray = (val: any) => {
-      if (!val) return [];
-      try { return typeof val === 'string' ? JSON.parse(val) : val; } catch { return []; }
-    };
-
     return {
       ...caregiver,
       dob: caregiver.birthDate,
-      specialties: parseArray(caregiver.specialties),
-      jobTypes: parseArray(caregiver.jobTypes),
-      cookingSkills: parseArray(caregiver.cookingSkills),
-      languages: parseArray(caregiver.languages),
-      certificates: parseArray(caregiver.certificates),
-      healthCertImages: parseArray(caregiver.healthCertImages),
-      lifeImages: parseArray(caregiver.lifeImages),
-      customData: caregiver.customData,
+      specialties: parseStringArray(caregiver.specialties),
+      jobTypes: parseStringArray(caregiver.jobTypes),
+      cookingSkills: parseStringArray(caregiver.cookingSkills),
+      languages: parseStringArray(caregiver.languages),
+      certificates: parseStringArray(caregiver.certificates),
+      healthCertImages: parseStringArray(caregiver.healthCertImages),
+      lifeImages: parseStringArray(caregiver.lifeImages),
+      customData: parseCustomDataObject(caregiver.customData),
     };
   } catch (error) {
     console.error('Failed to fetch caregiver:', error);
@@ -480,6 +526,7 @@ export async function getCaregiver(id: string) {
 
 export async function deleteCaregiver(id: string): Promise<ActionState> {
   try {
+    await requireAdminSession();
     await db.$transaction(async (tx) => {
       // 中文说明：护理员可能已经关联订单、结算单与时间线。
       // 其中时间线表已配置 onDelete: Cascade，但订单与结算单没有，

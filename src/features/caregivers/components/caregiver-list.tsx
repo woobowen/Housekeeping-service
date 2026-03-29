@@ -4,45 +4,16 @@ import Link from 'next/link';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Phone, GraduationCap, Briefcase, FileDown, Ruler, Weight, Clock } from 'lucide-react';
+import { MapPin, Phone, GraduationCap, FileDown, Ruler, Clock } from 'lucide-react';
 import { AvailabilityBadge } from './availability-badge';
 import { EducationMap, LiveInStatusMap } from '@/lib/mappings';
 import { toast } from 'sonner';
 import { utils, writeFile } from 'xlsx';
 import { getGlobalFieldConfig } from '@/features/system/actions';
-
-interface Caregiver {
-  id: string;
-  workerId: string;
-  fullName: string;
-  phone: string;
-  gender: string | null;
-  age: number;
-  dob: Date | null;
-  status: string;
-  nativePlace: string | null;
-  education: string | null;
-  height: number | null;
-  weight: number | null;
-  experienceYears: number | null;
-  isTrainee: boolean;
-  monthlySalary: number | null;
-  jobTypes: string[];
-  specialties: string[];
-  certificates: string[];
-  cookingSkills: string[];
-  languages: string[];
-  avatarUrl: string | null;
-  liveInStatus: string | null;
-  currentResidence: string | null;
-  residenceDetail: string | null;
-  idCardNumber: string;
-  notes: string | null;
-  customData: Record<string, any> | string | null | undefined;
-}
+import type { CaregiverListItem, DynamicFieldDefinition } from '@/features/caregivers/types';
 
 interface CaregiverListProps {
-  data: Caregiver[];
+  data: CaregiverListItem[];
 }
 
 export function CaregiverList({ data }: CaregiverListProps) {
@@ -51,7 +22,7 @@ export function CaregiverList({ data }: CaregiverListProps) {
       toast.loading('正在准备导出数据...');
 
       const fieldConfig = await getGlobalFieldConfig();
-      const dynamicFields = [
+      const dynamicFields: DynamicFieldDefinition[] = [
         ...(fieldConfig.sections.basic_info || []),
         ...(fieldConfig.sections.skills || [])
       ];
@@ -64,20 +35,27 @@ export function CaregiverList({ data }: CaregiverListProps) {
         "备注"
       ];
 
-      const getCustomValue = (customData: any, key: string) => {
+      const getCustomValue = (customData: Record<string, unknown> | string | null | undefined, key: string): string | number | boolean => {
         if (!customData) return '';
-        let obj = customData;
+        let obj: Record<string, unknown> | null = null;
         if (typeof customData === 'string') {
-          try { obj = JSON.parse(customData); } catch { return ''; }
+          try {
+            obj = JSON.parse(customData) as Record<string, unknown>;
+          } catch {
+            return '';
+          }
+        } else {
+          obj = customData;
         }
         const val = obj?.[key];
         if (typeof val === 'boolean') return val ? '是' : '否';
-        return val ?? '';
+        if (typeof val === 'number' || typeof val === 'string') return val;
+        return '';
       };
 
       const exportData = data.map(item => {
         const dynamicValues = dynamicFields.map(field => getCustomValue(item.customData, field.name));
-        const fmtArray = (val: any) => Array.isArray(val) ? val.join(', ') : '';
+        const fmtArray = (val: string[] | null | undefined): string => Array.isArray(val) ? val.join(', ') : '';
 
         return [
           item.workerId,

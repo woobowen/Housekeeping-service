@@ -10,12 +10,38 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { OrderForm, type OrderFormValues } from './order-form';
-import { updateOrder } from '../actions';
+import { OrderForm } from './order-form';
 import type { CaregiverOption } from '@/features/caregivers/actions';
+import type { OrderFormDefaultValues } from './order-form';
+
+interface OrderModalCaregiver {
+  name?: string | null;
+}
+
+interface EditableOrder {
+  id: string;
+  caregiverId?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  clientName?: string | null;
+  clientPhone?: string | null;
+  clientLocation?: string | null;
+  dispatcherName?: string | null;
+  dispatcherPhone?: string | null;
+  caregiver?: OrderModalCaregiver | null;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+  dailySalary?: number | string | null;
+  monthlySalary?: number | string | null;
+  managementFee?: number | string | null;
+  totalAmount?: number | string | null;
+  durationDays?: number | null;
+  status?: string | null;
+  remarks?: string | null;
+}
 
 interface EditOrderModalProps {
-  order: any;
+  order: EditableOrder | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   caregiverOptions?: CaregiverOption[];
@@ -24,27 +50,15 @@ interface EditOrderModalProps {
 export function EditOrderModal({ order, open, onOpenChange, caregiverOptions = [] }: EditOrderModalProps) {
   if (!order) return null;
 
-  const handleSubmit = async (values: OrderFormValues) => {
-    const effectiveDaily = values.dailySalary || (values.monthlySalary ? values.monthlySalary / 26 : 0);
-    
-    const payload = { 
-      ...values, 
-      dailySalary: effectiveDaily
-    };
-    
-    const result = await updateOrder(order.id, payload);
-    
-    if (result.success) {
-      toast.success('订单更新成功');
-      onOpenChange(false);
-    } else {
-      toast.error('更新失败', { description: result.message });
-    }
-  };
-
-  const defaultValues = {
+  const defaultValues: OrderFormDefaultValues = {
     ...order,
     clientName: order.clientName || '',
+    clientPhone: order.clientPhone || '',
+    clientLocation: order.clientLocation || '',
+    dispatcherName: order.dispatcherName || '',
+    dispatcherPhone: order.dispatcherPhone || '',
+    remarks: order.remarks || '',
+    status: order.status || 'PENDING',
     caregiverName: order.caregiver?.name || '',
     startDate: order.startDate ? new Date(order.startDate) : undefined,
     endDate: order.endDate ? new Date(order.endDate) : undefined,

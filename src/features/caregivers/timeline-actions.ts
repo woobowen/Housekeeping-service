@@ -3,35 +3,51 @@
 import { db } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
 import { saveFile } from '@/lib/file-storage';
+import { z } from 'zod';
+import { requireAdminSession } from '@/lib/auth/session';
 
-export async function addTimelineItem(prevState: any, formData: FormData) {
-  const caregiverId = formData.get('caregiverId') as string;
-  const content = formData.get('content') as string;
-  
-  if (!caregiverId || !content) {
-    return { success: false, message: 'Missing required fields' };
+const timelineSchema = z.object({
+  caregiverId: z.string().trim().min(1, '护理员 ID 不能为空'),
+  content: z.string().trim().min(1, '时间线内容不能为空').max(5000, '时间线内容过长'),
+});
+
+export async function addTimelineItem(_prevState: unknown, formData: FormData) {
+  await requireAdminSession();
+  const parsed = timelineSchema.safeParse({
+    caregiverId: formData.get('caregiverId'),
+    content: formData.get('content'),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message || '时间线参数不合法' };
   }
 
   try {
-    const files = formData.getAll('images') as File[];
-    const imageUrls: string[] = [];
+    const caregiver = await db.caregiver.findUnique({
+      where: { idString: parsed.data.caregiverId },
+      select: { idString: true },
+    });
 
-    for (const file of files) {
-      if (file.size > 0 && file.name) {
-        const url = await saveFile(file, 'timeline');
-        imageUrls.push(url);
-      }
+    if (!caregiver) {
+      return { success: false, message: '护理员不存在' };
     }
+
+    const files: File[] = formData.getAll('images').filter((file): file is File => file instanceof File);
+    const imageUrls: string[] = await Promise.all(
+      files
+        .filter((file: File) => file.size > 0 && file.name)
+        .map((file: File) => saveFile(file, 'timeline')),
+    );
 
     await db.caregiverTimeline.create({
       data: {
-        caregiverId,
-        content,
+        caregiverId: parsed.data.caregiverId,
+        content: parsed.data.content,
         imageUrls: JSON.stringify(imageUrls),
       },
     });
 
-    revalidatePath(`/caregivers/${caregiverId}`);
+    revalidatePath(`/caregivers/${parsed.data.caregiverId}`);
     return { success: true };
   } catch (error) {
     console.error('Failed to add timeline item:', error);
@@ -49,6 +65,7 @@ export type TimelineItem = {
 
 export async function getTimelineItems(caregiverId: string): Promise<TimelineItem[]> {
   try {
+    await requireAdminSession();
     const items = await db.caregiverTimeline.findMany({
       where: { caregiverId },
       orderBy: { createdAt: 'desc' },
@@ -59,7 +76,7 @@ export async function getTimelineItems(caregiverId: string): Promise<TimelineIte
       try {
         imageUrls = JSON.parse(item.imageUrls || '[]');
         if (!Array.isArray(imageUrls)) imageUrls = [];
-      } catch (e) {
+      } catch {
         imageUrls = [];
       }
 

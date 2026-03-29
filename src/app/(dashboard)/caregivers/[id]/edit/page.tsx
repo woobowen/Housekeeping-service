@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { getCaregiver } from '@/features/caregivers/actions';
 import { CaregiverForm } from '@/features/caregivers/components/caregiver-form';
-import { CaregiverFormValues } from '@/features/caregivers/schema';
+import type { CaregiverFormValues } from '@/features/caregivers/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,17 +20,17 @@ export default async function EditCaregiverPage(props: PageProps) {
   }
 
   // Transform db result to form values
-  const initialData: any = {
+  const initialData: Partial<CaregiverFormValues> & { idString: string } = {
     idString: caregiver.idString,
     workerId: caregiver.workerId,
     name: caregiver.name,
-    phone: caregiver.phone,
+    phone: caregiver.phone || '',
     idCardNumber: caregiver.idCardNumber || '',
     dob: caregiver.dob ? new Date(caregiver.dob) : null,
     gender: caregiver.gender || '女',
     nativePlace: caregiver.nativePlace || '',
     education: caregiver.education || '',
-    currentResidence: caregiver.currentResidence || '',
+    currentResidence: caregiver.currentResidence || undefined,
     residenceDetail: caregiver.residenceDetail || '',
     
     // Physical Info
@@ -63,7 +63,9 @@ export default async function EditCaregiverPage(props: PageProps) {
     lifeImages: Array.isArray(caregiver.lifeImages) ? caregiver.lifeImages : [],
     
     // Custom/System Data
-    customData: caregiver.customData || '',
+    customData: typeof caregiver.customData === 'string'
+      ? caregiver.customData
+      : JSON.stringify(caregiver.customData || {}),
   };
 
   return (

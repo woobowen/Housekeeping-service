@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client';
 import { 
   startOfMonth, 
   endOfMonth, 
@@ -9,24 +10,55 @@ import {
   max, 
   min, 
   parseISO, 
-  format,
   isAfter,
-  isBefore,
   isValid
 } from 'date-fns';
 import { sanitizeData } from '@/lib/utils/serialization';
 import type { SettlementDetail, SettlementItem } from './schema';
 
 import { deserializeCustomData } from '@/lib/utils/json-tunnel';
+import { requireAdminSession } from '@/lib/auth/session';
+
+type OrderSettlementHistoryItem = {
+  month: string;
+  actualDays: number;
+  totalAmount: number;
+  type: 'FULL' | 'PARTIAL';
+  source?: string;
+  createdAt: string;
+};
+
+type OrderCustomData = {
+  settlementHistory?: OrderSettlementHistoryItem[];
+};
+
+function upsertSettlementHistory(
+  history: OrderSettlementHistoryItem[],
+  nextItem: OrderSettlementHistoryItem,
+): OrderSettlementHistoryItem[] {
+  const filteredHistory: OrderSettlementHistoryItem[] = history.filter(
+    (item: OrderSettlementHistoryItem) => item.month !== nextItem.month,
+  );
+
+  return [...filteredHistory, nextItem];
+}
+
+type SettlementOrder = Prisma.OrderGetPayload<{
+  include: {
+    caregiver: true;
+  };
+}>;
+
+type SettlementCaregiver = SettlementOrder['caregiver'];
 
 /**
  * Core Calculation Engine
  * Calculates the settlement details for a caregiver in a specific month without saving to DB.
  */
 async function calculateSettlementForCaregiver(
-  caregiver: any, 
+  caregiver: SettlementCaregiver,
   monthStr: string,
-  orders: any[]
+  orders: SettlementOrder[]
 ): Promise<SettlementDetail> {
   const monthDate = parseISO(`${monthStr}-01`);
   const monthStart = startOfMonth(monthDate);
@@ -67,17 +99,16 @@ async function calculateSettlementForCaregiver(
       salaryMode = 'MONTHLY';
     }
 
-    const amount = Number((dailyRate * days).toFixed(2));
     const settlementType = isAfter(order.endDate, monthEnd) ? 'PARTIAL' : 'FULL';
 
     // 3. Check Order Level Settlement Status
-    const orderCustomData = deserializeCustomData(order.customData) || {};
-    const history = orderCustomData.settlementHistory || [];
-    const monthlySettlement = history.find((h: any) => h.month === monthStr);
+    const orderCustomData = deserializeCustomData<OrderCustomData>(order.customData);
+    const history = orderCustomData.settlementHistory ?? [];
+    const monthlySettlement = history.find((item) => item.month === monthStr);
     const isOrderSettled = !!monthlySettlement;
     
     // Use actualDays from order settlement if available, otherwise fallback to calculated days
-    const effectiveDays = isOrderSettled ? Number(monthlySettlement.actualDays) : days;
+    const effectiveDays = monthlySettlement ? Number(monthlySettlement.actualDays) : days;
     const finalAmount = Number((dailyRate * effectiveDays).toFixed(2));
 
     if (!isOrderSettled) {
@@ -122,6 +153,7 @@ async function calculateSettlementForCaregiver(
 
 export async function getSettlementCandidates(monthStr: string) {
   try {
+    await requireAdminSession();
     const monthDate = parseISO(`${monthStr}-01`);
     if (!isValid(monthDate)) return { success: false, message: '无效的月份格式', data: [] };
 
@@ -149,8 +181,8 @@ export async function getSettlementCandidates(monthStr: string) {
     const settlementMap = new Map(existingSettlements.map(s => [s.caregiverId, s]));
 
     // 3. Group Orders by Caregiver
-    const ordersByCaregiver = new Map<string, any[]>();
-    const caregiverInfo = new Map<string, any>();
+    const ordersByCaregiver = new Map<string, SettlementOrder[]>();
+    const caregiverInfo = new Map<string, SettlementCaregiver>();
 
     for (const order of orders) {
       if (!ordersByCaregiver.has(order.caregiverId)) {
@@ -165,6 +197,9 @@ export async function getSettlementCandidates(monthStr: string) {
 
     for (const [cgId, cgOrders] of ordersByCaregiver) {
       const caregiver = caregiverInfo.get(cgId);
+      if (!caregiver) {
+        continue;
+      }
       
       // Check if already settled
       const existing = settlementMap.get(cgId);
@@ -196,19 +231,21 @@ export async function getSettlementCandidates(monthStr: string) {
 export async function getSettlementHistory(monthStr: string) {
     // Re-use logic or just simple fetch
     try {
+        await requireAdminSession();
         const history = await db.salarySettlement.findMany({
             where: { month: monthStr },
             include: { caregiver: { select: { name: true, workerId: true } } },
             orderBy: { createdAt: 'desc' }
         });
         return { success: true, data: sanitizeData(history) };
-    } catch (e) {
+    } catch {
         return { success: false, data: [] };
     }
 }
 
 export async function createOrUpdateSettlement(data: SettlementDetail) {
   try {
+    await requireAdminSession();
     const result = await db.$transaction(async (tx) => {
       // 1. Upsert settlement record
       const record = await tx.salarySettlement.upsert({
@@ -232,40 +269,47 @@ export async function createOrUpdateSettlement(data: SettlementDetail) {
       });
 
       // 2. Sync back to each individual Order
-      for (const item of data.items) {
-        const order = await tx.order.findUnique({
-          where: { id: item.orderId },
-          select: { customData: true }
+      const orderIds: string[] = data.items.map((item) => item.orderId);
+      const orders = await tx.order.findMany({
+        where: {
+          id: {
+            in: orderIds,
+          },
+        },
+        select: {
+          id: true,
+          customData: true,
+        },
+      });
+      const orderMap = new Map(orders.map((order) => [order.id, order]));
+
+      await Promise.all(data.items.map(async (item) => {
+        const order = orderMap.get(item.orderId);
+        if (!order) {
+          return;
+        }
+
+        const currentCustomData = deserializeCustomData<OrderCustomData>(order.customData);
+        const nextHistory = upsertSettlementHistory(currentCustomData.settlementHistory ?? [], {
+          month: data.month,
+          actualDays: item.actualDays || item.daysInMonth,
+          totalAmount: item.amount,
+          type: item.settlementType,
+          source: 'FINANCE_CENTER',
+          createdAt: new Date().toISOString(),
         });
 
-        if (order) {
-          const currentCustomData = deserializeCustomData(order.customData) || {};
-          const history = currentCustomData.settlementHistory || [];
-          
-          // Only add if not already in history for this month
-          if (!history.some((h: any) => h.month === data.month)) {
-            history.push({
-              month: data.month,
-              actualDays: item.actualDays || item.daysInMonth,
-              totalAmount: item.amount,
-              type: item.settlementType,
-              source: 'FINANCE_CENTER',
-              createdAt: new Date().toISOString()
-            });
-          }
-
-          await tx.order.update({
-            where: { id: item.orderId },
-            data: {
-              paymentStatus: 'PAID',
-              customData: JSON.stringify({
-                ...currentCustomData,
-                settlementHistory: history
-              })
-            }
-          });
-        }
-      }
+        await tx.order.update({
+          where: { id: item.orderId },
+          data: {
+            paymentStatus: 'PAID',
+            customData: JSON.stringify({
+              ...currentCustomData,
+              settlementHistory: nextHistory,
+            }),
+          },
+        });
+      }));
 
       return record;
     });
@@ -275,8 +319,8 @@ export async function createOrUpdateSettlement(data: SettlementDetail) {
     revalidatePath('/orders');
     return { success: true, message: '结算单保存成功，已同步更新订单状态及支付标记', data: sanitizeData(result) };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Save Settlement Error:', error);
-    return { success: false, message: '保存失败: ' + error.message };
+    return { success: false, message: `保存失败: ${error instanceof Error ? error.message : '未知错误'}` };
   }
 }

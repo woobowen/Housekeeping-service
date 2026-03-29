@@ -11,12 +11,12 @@
  * @param coreSchemaKeys - Array of field names that exist as actual columns in the database
  * @returns An object containing coreData (mapped fields) and customDataString (serialized JSON)
  */
-export function serializeCustomData<T extends Record<string, any>>(
+export function serializeCustomData<T extends Record<string, unknown>>(
   allFields: T,
   coreSchemaKeys: string[]
 ) {
-  const coreData: Record<string, any> = {};
-  const customData: Record<string, any> = {};
+  const coreData: Record<string, unknown> = {};
+  const customData: Record<string, unknown> = {};
 
   Object.entries(allFields).forEach(([key, value]) => {
     if (coreSchemaKeys.includes(key)) {
@@ -39,7 +39,7 @@ export function serializeCustomData<T extends Record<string, any>>(
  * @param jsonString - The JSON string from the database (e.g., caregiver.customData)
  * @returns The parsed object or an empty object if null/invalid
  */
-export function deserializeCustomData<T = Record<string, any>>(
+export function deserializeCustomData<T = Record<string, unknown>>(
   jsonString: string | null | undefined
 ): T {
   if (!jsonString) {

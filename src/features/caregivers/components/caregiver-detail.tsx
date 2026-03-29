@@ -28,27 +28,34 @@ import {
 import { format } from 'date-fns';
 import { AvailabilityBadge } from './availability-badge';
 import {
-  EducationMap,
   GenderMap,
   CaregiverLevelMap,
 } from '@/lib/mappings';
 import { zhCN } from 'date-fns/locale';
+import type { CaregiverDetailData, DynamicFieldDefinition } from '@/features/caregivers/types';
 
 interface CaregiverDetailProps {
-  data: any;
-  systemFields?: any[];
+  data: CaregiverDetailData;
+  systemFields?: DynamicFieldDefinition[];
 }
 
 export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProps) {
-  const idCardImages = [data.idCardFrontUrl, data.idCardBackUrl].filter(Boolean);
-  const customDataMap = useMemo(() => {
+  const idCardImages = [data.idCardFrontUrl, data.idCardBackUrl].filter(
+    (url): url is string => typeof url === 'string' && url.length > 0,
+  );
+  const customDataMap = useMemo<Record<string, unknown>>(() => {
     if (!data.customData) return {};
     try {
-      return typeof data.customData === 'string' ? JSON.parse(data.customData) : data.customData;
-    } catch (e) { return {}; }
+      return typeof data.customData === 'string'
+        ? JSON.parse(data.customData) as Record<string, unknown>
+        : data.customData;
+    } catch {
+      return {};
+    }
   }, [data.customData]);
+  const genderLabel: string = data.gender ? (GenderMap[data.gender] || data.gender) : '未知';
 
-  const renderSkillSection = (title: string, icon: React.ReactNode, items: string[] | any) => {
+  const renderSkillSection = (title: string, icon: React.ReactNode, items: string[] | null | undefined) => {
     const list = Array.isArray(items) ? items : [];
     if (list.length === 0) return null;
     return (
@@ -82,7 +89,7 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
     );
   };
 
-  const renderGallery = (title: string, images: string[] | any) => {
+  const renderGallery = (title: string, images: string[] | null | undefined) => {
     const list = Array.isArray(images) ? images : [];
     if (list.length === 0) return null;
     return (
@@ -93,6 +100,7 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
           {list.map((url, i) => (
             <div key={i} className="aspect-[3/4] rounded-xl border border-slate-200 overflow-hidden bg-slate-100 hover:shadow-md transition-shadow cursor-pointer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={url} className="w-full h-full object-cover" alt={`${title}-${i}`} />
             </div>
           ))}
@@ -106,18 +114,18 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
       {/* Header Actions */}
       <div className="flex items-center justify-between">
         <Button variant="ghost" asChild className="-ml-4 hover:bg-slate-100">
-          <Link href="/caregivers">
+          <Link href="/caregivers" prefetch={false}>
             <ArrowLeft className="mr-2 h-4 w-4" /> 返回列表
           </Link>
         </Button>
         <div className="flex gap-3">
            <Button className="bg-blue-600 hover:bg-blue-700 shadow-md" asChild>
-             <Link href={`/orders?action=new&caregiverId=${data.idString}&caregiverName=${encodeURIComponent(data.name)}&caregiverPhone=${data.phone}`}>
+             <Link prefetch={false} href={`/orders?action=new&caregiverId=${data.idString}&caregiverName=${encodeURIComponent(data.name)}&caregiverPhone=${data.phone}`}>
                <FileSignature className="mr-2 h-4 w-4" /> 派单立项
              </Link>
            </Button>
            <Button variant="outline" asChild className="border-slate-200 shadow-sm">
-             <Link href={`/caregivers/${data.idString}/edit`}>编辑信息</Link>
+             <Link href={`/caregivers/${data.idString}/edit`} prefetch={false}>编辑信息</Link>
            </Button>
            <DeleteCaregiverButton id={data.idString} />
         </div>
@@ -132,7 +140,10 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
             <CardHeader className="text-center -mt-16 pb-2">
               <div className="w-32 h-32 mx-auto bg-white rounded-2xl border-4 border-white shadow-xl overflow-hidden flex items-center justify-center">
                 {data.avatarUrl ? (
-                    <img src={data.avatarUrl || "/placeholder-avatar.png"} alt={data.name} className="w-full h-full object-cover" />
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={data.avatarUrl || "/placeholder-avatar.png"} alt={data.name} className="w-full h-full object-cover" />
+                    </>
                 ) : (
                     <div className="w-full h-full bg-slate-100 flex items-center justify-center">
                         <User className="h-16 w-16 text-slate-300" />
@@ -157,7 +168,7 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
                   "flex items-center text-sm font-medium p-3 rounded-xl",
                   data.gender === "男" ? "text-blue-600 bg-blue-100/50" : "text-pink-600 bg-pink-100/50"
                 )}>
-                  <User className={cn("mr-3 h-4 w-4", data.gender === "男" ? "text-blue-500" : "text-pink-500")} /> {GenderMap[data.gender] || data.gender || '未知'}
+                  <User className={cn("mr-3 h-4 w-4", data.gender === "男" ? "text-blue-500" : "text-pink-500")} /> {genderLabel}
                 </div>
               </div>
               
@@ -251,10 +262,10 @@ export function CaregiverDetail({ data, systemFields = [] }: CaregiverDetailProp
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 grid grid-cols-2 md:grid-cols-3 gap-6">
-                {systemFields.map((field: any) => (
+                {systemFields.map((field: DynamicFieldDefinition) => (
                    <div key={field.name} className="space-y-1">
                      <p className="text-xs font-bold text-slate-400 uppercase">{field.label}</p>
-                     <p className="text-sm font-medium">{customDataMap[field.name] || '-'}</p>
+                     <p className="text-sm font-medium">{String(customDataMap[field.name] ?? '-')}</p>
                    </div>
                 ))}
               </CardContent>

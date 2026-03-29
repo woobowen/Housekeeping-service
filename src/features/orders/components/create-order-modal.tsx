@@ -14,12 +14,13 @@ import {
 import { OrderForm, type OrderFormValues } from './order-form';
 import { createOrder } from '../actions';
 import type { CaregiverOption } from '@/features/caregivers/actions';
+import type { OrderFormDefaultValues } from './order-form';
 
 interface CreateOrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   caregiverOptions: CaregiverOption[];
-  initialData?: any;
+  initialData?: Partial<OrderFormDefaultValues>;
 }
 
 export function CreateOrderModal({ open, onOpenChange, initialData, caregiverOptions }: CreateOrderModalProps) {

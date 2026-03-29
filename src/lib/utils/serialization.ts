@@ -1,5 +1,15 @@
 import { Prisma } from '@prisma/client';
 
+type PlainObject = Record<string, unknown>;
+
+function isPlainObject(value: unknown): value is PlainObject {
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && !(value instanceof Date)
+    && !Prisma.Decimal.isDecimal(value);
+}
+
 /**
  * Recursively traverses an object/array and converts Prisma Decimal objects to numbers.
  * Also handles Date objects if needed (Next.js supports Date, but sometimes ISO string is preferred).
@@ -11,31 +21,25 @@ export function sanitizeData<T>(data: T): T {
   }
 
   if (typeof data === 'object') {
-    // Check for Prisma Decimal (or any object with toNumber method that looks like Decimal)
-    if (
-      Prisma.Decimal.isDecimal(data) || 
-      (data as any) instanceof Prisma.Decimal
-    ) {
-      return (data as any).toNumber();
+    if (Prisma.Decimal.isDecimal(data)) {
+      return data.toNumber() as T;
     }
 
     if (Array.isArray(data)) {
-      return data.map(item => sanitizeData(item)) as unknown as T;
+      return data.map((item: unknown) => sanitizeData(item)) as T;
     }
 
     if (data instanceof Date) {
-      // Next.js handles Date serialization, so we keep it.
       return data;
     }
 
-    // Plain object
-    const sanitized: any = {};
-    for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
-        sanitized[key] = sanitizeData((data as any)[key]);
+    if (isPlainObject(data)) {
+      const sanitized: PlainObject = {};
+      for (const [key, value] of Object.entries(data)) {
+        sanitized[key] = sanitizeData(value);
       }
+      return sanitized as T;
     }
-    return sanitized as T;
   }
 
   return data;

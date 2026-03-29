@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -12,7 +12,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { 
   Table, 
   TableBody, 
@@ -21,7 +20,7 @@ import {
   TableHeader, 
   TableRow 
 } from '@/components/ui/table';
-import { Loader2, AlertCircle, CheckCircle2, ArrowRightLeft, XCircle, Info } from 'lucide-react';
+import { Loader2, AlertCircle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { SettlementDetail } from '../schema';
@@ -114,7 +113,7 @@ export function SettlementDetailModal({
                    <strong>结算限制：存在尚未结单的订单</strong>
                    <p>该阿姨在本月涉及的订单中，仍有部分未在“订单管理”模块完成本月的薪资核算。请先前往订单模块完成对应的“结单”操作。</p>
                    <Button asChild size="sm" variant="destructive" className="h-7 text-xs">
-                      <Link href="/orders">前往订单管理</Link>
+                      <Link href="/orders" prefetch={false}>前往订单管理</Link>
                    </Button>
                  </div>
                </div>

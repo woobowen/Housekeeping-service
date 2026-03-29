@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useTransition } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { isValid, differenceInDays, addDays } from 'date-fns';
@@ -17,7 +17,6 @@ import {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import {
   Form,
@@ -37,7 +36,7 @@ import {
 } from '@/components/ui/select';
 
 import { useRouter } from 'next/navigation';
-import { createOrder, updateOrder } from '../actions';
+import { updateOrder } from '../actions';
 import type { CaregiverOption } from '@/features/caregivers/actions';
 
 const phoneRegex = /^1[3-9]\d{9}$/;
@@ -67,8 +66,36 @@ export const orderFormSchema = z.object({
 
 export type OrderFormValues = z.infer<typeof orderFormSchema>;
 
+interface EmbeddedCaregiver {
+  phone?: string | null;
+  name?: string | null;
+}
+
+export interface OrderFormDefaultValues {
+  id?: string;
+  caregiverId?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  monthlySalary?: number | string | null;
+  dailySalary?: number | string | null;
+  durationDays?: number | null;
+  clientName?: string;
+  clientPhone?: string;
+  clientLocation?: string;
+  dispatcherName?: string;
+  dispatcherPhone?: string;
+  managementFee?: number | string | null;
+  caregiver?: EmbeddedCaregiver | null;
+  contactPhone?: string | null;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  totalAmount?: number | string | null;
+  status?: string;
+  remarks?: string;
+}
+
 interface OrderFormProps {
-  defaultValues?: Partial<OrderFormValues> & { id?: string };
+  defaultValues?: OrderFormDefaultValues;
   caregiverOptions?: CaregiverOption[];
   onSubmit: (values: OrderFormValues) => Promise<void>;
   submitLabel?: string;
@@ -87,16 +114,16 @@ export function OrderForm({
   const lastDateUpdate = useRef<'startDate' | 'endDate' | 'duration' | null>(null);
 
   const form = useForm<OrderFormValues>({
-    resolver: zodResolver(orderFormSchema) as any,
+    resolver: zodResolver(orderFormSchema) as Resolver<OrderFormValues>,
     defaultValues: {
       caregiverId: defaultValues?.caregiverId ?? '',
       caregiverName: defaultValues?.caregiverName ?? '',
-      caregiverPhone: defaultValues?.caregiverPhone || (defaultValues as any)?.caregiver?.phone || '',
+      caregiverPhone: defaultValues?.caregiverPhone || defaultValues?.caregiver?.phone || '',
       monthlySalary: Number(defaultValues?.monthlySalary ?? 0),
       dailySalary: Number(defaultValues?.dailySalary ?? 0),
       durationDays: Number(defaultValues?.durationDays ?? 1),
       clientName: defaultValues?.clientName ?? '',
-      clientPhone: defaultValues?.clientPhone || (defaultValues as any)?.contactPhone || '',
+      clientPhone: defaultValues?.clientPhone || defaultValues?.contactPhone || '',
       clientLocation: defaultValues?.clientLocation ?? '',
       dispatcherName: defaultValues?.dispatcherName ?? '',
       dispatcherPhone: defaultValues?.dispatcherPhone ?? '',
@@ -115,12 +142,12 @@ export function OrderForm({
       form.reset({
         caregiverId: String(defaultValues.caregiverId ?? ''),
         caregiverName: String(defaultValues.caregiverName ?? ''),
-        caregiverPhone: String(defaultValues.caregiverPhone || (defaultValues as any)?.caregiver?.phone || ''),
+        caregiverPhone: String(defaultValues.caregiverPhone || defaultValues.caregiver?.phone || ''),
         monthlySalary: Number(defaultValues.monthlySalary ?? 0),
         dailySalary: Number(defaultValues.dailySalary ?? 0),
         durationDays: Number(defaultValues.durationDays ?? 1),
         clientName: String(defaultValues.clientName ?? ''),
-        clientPhone: String(defaultValues.clientPhone || (defaultValues as any)?.contactPhone || ''),
+        clientPhone: String(defaultValues.clientPhone || defaultValues.contactPhone || ''),
         clientLocation: String(defaultValues.clientLocation ?? ''),
         dispatcherName: String(defaultValues.dispatcherName ?? ''),
         dispatcherPhone: String(defaultValues.dispatcherPhone ?? ''),
@@ -132,7 +159,7 @@ export function OrderForm({
         remarks: String(defaultValues.remarks ?? ''),
       });
     }
-  }, [defaultValues?.id, form]);
+  }, [defaultValues, form]);
 
   const { control, setValue } = form;
 
@@ -165,8 +192,9 @@ export function OrderForm({
     if (!watchedStartDate) return;
 
     if (lastDateUpdate.current === 'startDate' || lastDateUpdate.current === 'duration') {
-      if (watchedDurationDays !== undefined && watchedDurationDays > 0) {
-        const newEndDate = addDays(watchedStartDate, watchedDurationDays - 1);
+      const durationDays = Number(watchedDurationDays ?? 0);
+      if (durationDays > 0) {
+        const newEndDate = addDays(watchedStartDate, durationDays - 1);
         if (!watchedEndDate || watchedEndDate.getTime() !== newEndDate.getTime()) {
           setValue('endDate', newEndDate);
         }
@@ -244,7 +272,7 @@ export function OrderForm({
                     }}
                   >
                     <FormControl>
-                      <SelectTrigger className="bg-white">
+                      <SelectTrigger className="bg-white" data-testid="order-caregiver-select-trigger">
                         <SelectValue placeholder="按姓名 / 工号选择阿姨" />
                       </SelectTrigger>
                     </FormControl>

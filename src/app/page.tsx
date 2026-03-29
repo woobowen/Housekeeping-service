@@ -5,7 +5,28 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DashboardLayout from './(dashboard)/layout';
 import { db } from '@/lib/prisma';
-import { getSettlementCandidates } from '@/features/finance/actions';
+import { requireAdminSession } from '@/lib/auth/session';
+import { deserializeCustomData } from '@/lib/utils/json-tunnel';
+
+type DashboardOrderLite = {
+  caregiverId: string;
+  startDate: Date;
+  endDate: Date;
+  dailySalary: PrismaDecimalLike | null;
+  monthlySalary: PrismaDecimalLike | null;
+  caregiver: {
+    monthlySalary: PrismaDecimalLike | null;
+  };
+  customData: string | null;
+};
+
+type PrismaDecimalLike = {
+  toString(): string;
+} | number | null;
+
+type DashboardSettlementHistoryItem = {
+  month?: string;
+};
 
 async function getDashboardOverview() {
   const today = new Date();
@@ -21,7 +42,7 @@ async function getDashboardOverview() {
     activeCaregiverCount,
     monthlyCandidates,
     crossMonthOrderCount,
-    settlementCandidates,
+    settlementOrders,
   ] = await Promise.all([
     db.order.count({
       where: {
@@ -45,7 +66,26 @@ async function getDashboardOverview() {
         endDate: { gt: monthEnd },
       },
     }),
-    getSettlementCandidates(monthKey),
+    db.order.findMany({
+      where: {
+        status: { in: ['CONFIRMED', 'COMPLETED', 'SERVING', 'PENDING'] },
+        startDate: { lte: monthEnd },
+        endDate: { gte: monthStart },
+      },
+      select: {
+        caregiverId: true,
+        startDate: true,
+        endDate: true,
+        dailySalary: true,
+        monthlySalary: true,
+        customData: true,
+        caregiver: {
+          select: {
+            monthlySalary: true,
+          },
+        },
+      },
+    }),
   ]);
 
   const settledCaregiverIds = new Set(monthlyCandidates.map((item) => item.caregiverId));
@@ -63,15 +103,45 @@ async function getDashboardOverview() {
     (item) => !settledCaregiverIds.has(item.caregiverId)
   ).length;
 
+  const pendingSettlementAmount = settlementOrders.reduce((sum: number, order: DashboardOrderLite) => {
+    if (settledCaregiverIds.has(order.caregiverId)) {
+      return sum;
+    }
+
+    const orderCustomData = deserializeCustomData<{ settlementHistory?: DashboardSettlementHistoryItem[] }>(order.customData);
+    const hasCurrentMonthSettlement = (orderCustomData.settlementHistory ?? []).some(
+      (item: DashboardSettlementHistoryItem) => item.month === monthKey,
+    );
+
+    if (hasCurrentMonthSettlement) {
+      return sum;
+    }
+
+    const effectiveStart: Date = order.startDate > monthStart ? order.startDate : monthStart;
+    const effectiveEnd: Date = order.endDate < monthEnd ? order.endDate : monthEnd;
+    const serviceDays: number = Math.max(
+      0,
+      Math.floor((effectiveEnd.getTime() - effectiveStart.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+    );
+
+    if (serviceDays <= 0) {
+      return sum;
+    }
+
+    const orderDailySalary: number = Number(order.dailySalary ?? 0);
+    const orderMonthlySalary: number = Number(order.monthlySalary ?? order.caregiver.monthlySalary ?? 0);
+    const dailyRate: number = orderDailySalary > 0 ? orderDailySalary : orderMonthlySalary / 26;
+
+    return sum + (dailyRate > 0 ? dailyRate * serviceDays : 0);
+  }, 0);
+
   return {
     activeOrderCount,
     idleCaregiverCount,
     activeCaregiverCount,
     pendingSettlementCount,
     crossMonthOrderCount,
-    pendingSettlementAmount: settlementCandidates.success
-      ? settlementCandidates.data.reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0)
-      : 0,
+    pendingSettlementAmount,
     monthKey,
   };
 }
@@ -108,6 +178,7 @@ const quickLinks = [
 ];
 
 export default async function HomePage() {
+  await requireAdminSession();
   const overview = await getDashboardOverview();
 
   return (
@@ -179,7 +250,7 @@ export default async function HomePage() {
                   </CardHeader>
                   <CardContent>
                     <Button asChild className="w-full justify-between rounded-xl">
-                      <Link href={item.href}>
+                      <Link href={item.href} prefetch={false}>
                         {item.cta}
                         <ArrowRight className="h-4 w-4" />
                       </Link>

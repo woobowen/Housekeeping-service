@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 import { getGlobalFieldConfig } from '@/features/system/actions';
 import { GlobalFieldManager } from '@/features/settings/components/global-field-manager';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export const metadata = {

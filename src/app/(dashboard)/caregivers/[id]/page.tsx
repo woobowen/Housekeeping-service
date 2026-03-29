@@ -5,6 +5,7 @@ import { getGlobalFieldConfig } from '@/features/system/actions';
 import { CaregiverDetail } from '@/features/caregivers/components/caregiver-detail';
 import { TimelineSection } from '@/features/caregivers/components/timeline-section';
 import { sanitizeData } from '@/lib/utils/serialization';
+import type { CaregiverDetailData, DynamicFieldDefinition, TimelineItem } from '@/features/caregivers/types';
 
 interface PageProps {
   params: Promise<{
@@ -23,17 +24,17 @@ export default async function CaregiverDetailPage(props: PageProps) {
   }
 
   // SERIALIZATION FIX: Use centralized utility to handle Decimals and other non-plain objects
-  const serializedCaregiver = sanitizeData(caregiver);
+  const serializedCaregiver = sanitizeData(caregiver) as CaregiverDetailData;
 
   // Restore metadata object from JSON string for the UI component
-  const caregiverWithMetadata = {
+  const caregiverWithMetadata: CaregiverDetailData = {
     ...serializedCaregiver,
     metadata: {},
   };
 
   // Flatten sections for the detail view if needed, or pass as is
   // The user wants to iterate through the config and show values from customData.
-  const dynamicFields = [
+  const dynamicFields: DynamicFieldDefinition[] = [
     ...(globalConfig.sections.basic_info || []),
     ...(globalConfig.sections.skills || []),
   ];
@@ -41,12 +42,12 @@ export default async function CaregiverDetailPage(props: PageProps) {
   return (
     <div className="p-6 space-y-8">
       <CaregiverDetail 
-        data={caregiverWithMetadata as any} 
-        systemFields={dynamicFields as any}
+        data={caregiverWithMetadata}
+        systemFields={dynamicFields}
       />
       <TimelineSection
         caregiverId={id}
-        initialItems={sanitizeData(timelineItems) as any}
+        initialItems={sanitizeData(timelineItems) as TimelineItem[]}
       />
     </div>
   );

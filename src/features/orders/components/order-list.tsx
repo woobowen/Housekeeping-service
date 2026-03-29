@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { format } from 'date-fns';
 import { Pencil, CheckCircle, Search, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -29,28 +29,43 @@ import { getOrders } from '../actions';
 import { DatePicker } from '@/components/ui/date-picker';
 import { X } from 'lucide-react';
 import type { CaregiverOption } from '@/features/caregivers/actions';
+import type { OrderFormDefaultValues } from './order-form';
+
+interface OrderListCaregiver {
+  idString: string;
+  name: string;
+  workerId: string;
+}
+
+export interface OrderListItem extends OrderFormDefaultValues {
+  id: string;
+  orderNo: string;
+  status: string;
+  clientLocation: string;
+  startDate: string | Date;
+  endDate: string | Date;
+  caregiver?: OrderListCaregiver | null;
+  customData?: Record<string, unknown> | null;
+}
 
 interface OrderListProps {
-  orders?: any[];
+  orders?: OrderListItem[];
   caregiverOptions?: CaregiverOption[];
 }
 
 export function OrderList({ orders: initialOrders = [], caregiverOptions = [] }: OrderListProps) {
-  const [orders, setOrders] = useState(initialOrders || []);
-  const [editingOrder, setEditingOrder] = useState<any>(null);
-  const [settlingOrder, setSettlingOrder] = useState<any>(null);
+  const [orders, setOrders] = useState<OrderListItem[] | null>(null);
+  const [editingOrder, setEditingOrder] = useState<OrderListItem | null>(null);
+  const [settlingOrder, setSettlingOrder] = useState<OrderListItem | null>(null);
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState('caregiver');
   const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setOrders(initialOrders || []);
-  }, [initialOrders]);
+  const displayedOrders: OrderListItem[] = orders ?? initialOrders;
 
   const handleSearch = () => {
     startTransition(async () => {
       const data = await getOrders(query, searchType);
-      setOrders(data || []);
+      setOrders((data as unknown as OrderListItem[]) || []);
     });
   };
 
@@ -58,16 +73,8 @@ export function OrderList({ orders: initialOrders = [], caregiverOptions = [] }:
     setQuery('');
     startTransition(async () => {
       const data = await getOrders('', 'caregiver');
-      setOrders(data || []);
+      setOrders((data as unknown as OrderListItem[]) || []);
     });
-  };
-
-  const formatCustomData = (customData: any) => {
-    if (!customData || Object.keys(customData).length === 0) return '-';
-    return Object.entries(customData)
-      .slice(0, 3)
-      .map(([k, v]) => `${k}:${v}`)
-      .join(', ') + (Object.keys(customData).length > 3 ? '...' : '');
   };
 
   const getStatusBadge = (status: string) => {
@@ -146,14 +153,14 @@ export function OrderList({ orders: initialOrders = [], caregiverOptions = [] }:
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(orders || []).length === 0 ? (
+            {displayedOrders.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
                   暂无订单
                 </TableCell>
               </TableRow>
             ) : (
-              (orders || []).map((order) => (
+              displayedOrders.map((order: OrderListItem) => (
                 <TableRow key={order.id}>
                   <TableCell className="font-medium">{order.orderNo}</TableCell>
                   <TableCell>
@@ -217,6 +224,7 @@ export function OrderList({ orders: initialOrders = [], caregiverOptions = [] }:
       />
 
       <SettleOrderModal
+        key={settlingOrder?.id || 'empty-order'}
         open={!!settlingOrder}
         onOpenChange={(open) => !open && setSettlingOrder(null)}
         order={settlingOrder}

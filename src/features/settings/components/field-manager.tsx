@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useTransition } from 'react';
 import { addField, deleteField, getFields } from '@/features/settings/field-actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ type Field = {
 export function FieldManager({ targetModel }: FieldManagerProps) {
   const [fields, setFields] = useState<Field[]>([]);
   const [loading, setLoading] = useState(false);
+  const [, startTransition] = useTransition();
 
   // Form State
   const [label, setLabel] = useState('');
@@ -36,15 +37,12 @@ export function FieldManager({ targetModel }: FieldManagerProps) {
   const [required, setRequired] = useState(false);
 
   // Load fields
-  const loadFields = async () => {
-    const data = await getFields(targetModel);
-    // Safe casting since we know the shape from action
-    setFields(data as any);
+  const loadFields = (): void => {
+    startTransition(async () => {
+      const data = await getFields(targetModel);
+      setFields(data as Field[]);
+    });
   };
-
-  useEffect(() => {
-    loadFields();
-  }, [targetModel]);
 
   const handleLabelChange = (val: string) => {
     setLabel(val);

@@ -6,6 +6,7 @@ import { ComprehensiveFilter } from '@/features/caregivers/components/comprehens
 import { CaregiverImportDialog } from '@/features/caregivers/components/caregiver-import-dialog';
 import { DownloadTemplateButton } from '@/features/caregivers/components/download-template-button';
 import { Plus } from 'lucide-react';
+import type { CaregiverListItem } from '@/features/caregivers/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,19 +100,19 @@ export default async function CaregiversPage(props: PageProps) {
         <div className="flex flex-wrap gap-3">
           <div className="flex gap-2 mr-4 border-r pr-4 border-slate-200">
             <Button variant="outline" asChild size="sm">
-              <Link href="/orders">新建订单</Link>
+              <Link href="/orders" prefetch={false}>新建订单</Link>
             </Button>
             <Button variant="outline" asChild size="sm">
-              <Link href="/salary-settlement">薪资结算</Link>
+              <Link href="/salary-settlement" prefetch={false}>薪资结算</Link>
             </Button>
             <Button variant="outline" asChild size="sm">
-              <Link href="/settings/fields">字段设置</Link>
+              <Link href="/settings/fields" prefetch={false}>字段设置</Link>
             </Button>
           </div>
           <DownloadTemplateButton />
           <CaregiverImportDialog />
           <Button asChild className="shadow-md">
-            <Link href="/caregivers/new">
+            <Link href="/caregivers/new" prefetch={false}>
               <Plus className="mr-2 h-4 w-4" />
               手工录入阿姨
             </Link>
@@ -125,7 +126,7 @@ export default async function CaregiversPage(props: PageProps) {
         data={(data || []).map(item => ({
           ...item,
           idCardNumber: item.idCardNumber || "",
-        })) as any} 
+        })) as CaregiverListItem[]} 
       />
       
       {/* Pagination Controls */}
@@ -136,7 +137,7 @@ export default async function CaregiversPage(props: PageProps) {
           asChild={pagination.current > 1}
         >
           {pagination.current > 1 ? (
-            <Link href={createPageUrl(pagination.current - 1)}>上一页</Link>
+            <Link href={createPageUrl(pagination.current - 1)} prefetch={false}>上一页</Link>
           ) : (
             <span>上一页</span>
           )}
@@ -154,7 +155,7 @@ export default async function CaregiversPage(props: PageProps) {
           asChild={pagination.current < pagination.totalPages}
         >
           {pagination.current < pagination.totalPages ? (
-             <Link href={createPageUrl(pagination.current + 1)}>下一页</Link>
+             <Link href={createPageUrl(pagination.current + 1)} prefetch={false}>下一页</Link>
           ) : (
             <span>下一页</span>
           )}

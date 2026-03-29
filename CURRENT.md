@@ -1,536 +1,222 @@
 # CURRENT.md
 
-## 自动化 E2E 验证清单 (E2E Verification Matrix)
+## 商用级 Auth 重构实施蓝图
 
-### 1. 源码逆向结论总览
+### 1. 目标
 
-#### 1.1 真实页面路由
+将当前基于硬编码凭证 + 明文 Cookie 的假登录体系，重构为可用于公网 MVP 的管理员鉴权系统。新体系只服务后台管理员，不污染现有业务 `User` 表。
 
-| 路由 | 页面定位 | 核心入口组件 / 数据链 |
-| --- | --- | --- |
-| `/login` | 管理员登录页 | `src/app/login/page.tsx` + `src/features/auth/actions.ts` |
-| `/` | 经营总览工作台 | `src/app/page.tsx` |
-| `/caregivers` | 阿姨库列表 + 高级筛选 + 导出 | `src/app/(dashboard)/caregivers/page.tsx` |
-| `/caregivers/new` | 新建阿姨五步表单 | `src/app/(dashboard)/caregivers/new/page.tsx` |
-| `/caregivers/[id]` | 阿姨详情 + 时间线 | `src/app/(dashboard)/caregivers/[id]/page.tsx` |
-| `/caregivers/[id]/edit` | 编辑阿姨资料 | `src/app/(dashboard)/caregivers/[id]/edit/page.tsx` |
-| `/orders` | 订单列表 + 搜索 + 新建/修改/结单/删除 | `src/app/(dashboard)/orders/page.tsx` |
-| `/salary-settlement` | 月度结算中心 | `src/app/(dashboard)/salary-settlement/page.tsx` |
-| `/settings/fields` | 全局动态字段设置 | `src/app/(dashboard)/settings/fields/page.tsx` |
+核心目标：
 
-#### 1.2 登录与鉴权链
+1. 建立独立的管理员账号模型与验证码模型。
+2. 使用邮箱验证码完成零成本注册闭环。
+3. 使用密码哈希 + JWT HttpOnly Cookie 完成登录会话。
+4. 使用中间件 + 服务端会话解析实现真实路由守卫。
+5. 为后续 RBAC、审计日志、密码重置和多端会话治理预留边界。
 
-1. `src/middleware.ts` 拦截除 `/login` 外的所有页面。
-2. 若缺少 `auth_session` cookie，则统一重定向到 `/login`。
-3. 登录表单提交 `username` / `password` 到 `login` Server Action。
-4. 仅当用户名为 `吴博闻`、密码为 `123456` 时写入 `auth_session=true`。
-5. 登录成功前端 `toast.success('登录成功')` 后执行 `window.location.href = '/'`。
-6. 退出登录按钮调用 `logout()`，删除 cookie 并 `redirect('/login')`。
+### 2. 数据模型隔离方案
 
-#### 1.3 核心业务链路
+#### 2.1 新增管理员账号表 `AdminAccount`
 
-1. 登录流
-   `/login` -> 成功写 cookie -> `/`
-2. 阿姨录入流
-   `/caregivers` -> `/caregivers/new` -> 五步表单 -> `createCaregiver` -> 上传图片到 Supabase -> Prisma 建档 -> `router.push('/caregivers/[id]')`
-3. 阿姨详情派单流
-   `/caregivers/[id]` -> 点击“派单立项” -> `/orders?action=new&caregiverId=...` -> 自动打开新建订单弹窗 -> 成功留在 `/orders`
-4. 订单派发与防冲突流
-   `/orders` -> 新建订单弹窗 -> 选择阿姨后自动回填手机号与月薪 -> 日期/天数/金额联动 -> 提交时 `checkCaregiverAvailability` 冲突校验 -> 成功建单并将阿姨置为 `BUSY`
-5. 订单结单流
-   `/orders` -> 结单弹窗 -> 输入实际工作天数 -> `settleOrder` -> 非跨月单置 `COMPLETED` 并释放阿姨，跨月单保持活跃并写入 `settlementHistory`
-6. 月底结算流
-   `/salary-settlement` -> 选择月份 -> 候选结算列表 / 历史记录 -> 详情弹窗 -> 若关联订单均已结单则允许“确认生成结算单”
-7. 动态字段配置流
-   `/settings/fields` -> 新增/编辑/删除字段 -> 写入 `SystemSettings(caregiver_metadata)` -> 新建/编辑阿姨表单扩展字段即时生效
-8. 阿姨时间线流
-   `/caregivers/[id]` -> 文本 + 多图上传 -> `addTimelineItem` -> 上传到 Supabase -> 时间线刷新
+新增独立模型，不复用业务 `User`：
 
-### 2. Playwright 执行守则
+- `id String @id @default(cuid())`
+- `email String @unique`
+- `phone String @unique`
+- `passwordHash String`
+- `role String`
+- `status String @default("ACTIVE")`
+- `emailVerifiedAt DateTime?`
+- `lastLoginAt DateTime?`
+- `createdAt DateTime @default(now())`
+- `updatedAt DateTime @updatedAt`
 
-1. 访问任意业务路由前先检查是否被打回 `/login`。
-2. 若在 `/login`，使用固定凭据登录：
-   `username=吴博闻`
-   `password=123456`
-3. 所有点击提交后必须等待 URL 变化、特定 DOM 出现或网络静默。
-4. 禁止截图，只允许依赖 DOM、Console、Network、JS evaluate。
-5. 若有 destructive 操作，仅打开弹窗或验证拦截，不执行最终删除确认。
+设计原则：
 
-### 3. 详细验证矩阵
+1. `email` 是登录主身份标识。
+2. `phone` 只负责唯一性校验与后续业务联系，不参与短信 OTP 成本链路。
+3. `passwordHash` 只存哈希，不存明文或可逆密文。
+4. `role` 先以字符串枚举实现，MVP 至少保留 `SUPER_ADMIN` / `ADMIN`。
+5. 后续若需要冻结账号，可直接基于 `status` 扩展。
 
-#### 模块 A: 认证与路由守卫
+#### 2.2 新增验证码表 `VerificationCode`
 
-##### A-01 未登录访问工作台应被拦截
-- 目标 URL: `/`
-- 前置条件: 清空 cookie / 新会话
-- 预期 DOM:
-  `HouseCare-Pro 登录`
-  `用户名`
-  `密码`
-  `登录`
-- 预期前端交互:
-  直接访问 `/` 后应跳到登录页
-- 预期路由跳转:
-  `/` -> `/login`
+用于邮箱验证码、防刷、过期和一次性消费控制：
 
-##### A-02 正确凭据登录成功
-- 目标 URL: `/login`
-- 预期 DOM:
-  `HouseCare-Pro 登录`
-  `请输入管理员账号和密码`
-  `#username`
-  `#password`
-  `登录`
-- 预期前端交互:
-  输入正确凭据后点击 `登录`
-  应出现成功态 toast 文案 `登录成功` 或随后立即跳走
-- 预期路由跳转:
-  `/login` -> `/`
+- `id String @id @default(cuid())`
+- `email String`
+- `codeHash String`
+- `type String`
+- `expiresAt DateTime`
+- `consumedAt DateTime?`
+- `createdAt DateTime @default(now())`
 
-##### A-03 已登录访问受保护页面不应再次被打回登录
-- 目标 URL:
-  `/`
-  `/caregivers`
-  `/orders`
-  `/salary-settlement`
-  `/settings/fields`
-- 预期 DOM:
-  顶部应存在 `HouseCare-Pro`
-  顶部应存在 `退出登录`
-- 预期前端交互:
-  保持已登录态直接进入页面
-- 预期路由跳转:
-  无额外重定向
+索引与约束方向：
 
-#### 模块 B: 工作台 Dashboard
+1. 基于 `email + type + createdAt` 查询最近发送记录，实现 60 秒限流。
+2. 基于 `email + type + consumedAt + expiresAt` 查询当前有效验证码。
+3. 验证码只存 `codeHash`，不落明文，防止数据库泄露后被直接利用。
 
-##### B-01 工作台核心统计卡片渲染
-- 目标 URL: `/`
-- 预期 DOM:
-  `今日经营概览`
-  `当前结算月份`
-  `今日进行中订单`
-  `当前空闲阿姨`
-  `本月待结算人数`
-  `本月待结总额`
-- 预期前端交互:
-  页面应稳定渲染 4 张统计卡片与 4 张快捷入口卡片
-- 预期路由跳转:
-  无
+### 3. 注册与登录策略
 
-##### B-02 工作台快捷入口可导航
-- 目标 URL: `/`
-- 预期 DOM:
-  `前往家政员管理`
-  `前往订单调度`
-  `前往薪资结算`
-  `前往字段设置`
-- 预期前端交互:
-  每个 CTA 都应是可点击链接
-- 预期路由跳转:
-  对应跳到 `/caregivers`、`/orders`、`/salary-settlement`、`/settings/fields`
+#### 3.1 注册
 
-#### 模块 C: 阿姨库列表与筛选
+注册页 `/register` 必填：
 
-##### C-01 阿姨列表页基础骨架
-- 目标 URL: `/caregivers`
-- 预期 DOM:
-  `阿姨库管理`
-  `高级筛选`
-  `手工录入阿姨`
-  `导出 Excel 数据`
-  `搜索姓名、工号、电话或身份证...`
-- 预期前端交互:
-  高级筛选卡、列表区域、分页按钮应完整渲染
-- 预期路由跳转:
-  无
+- 手机号
+- 邮箱
+- 密码
+- 邮箱验证码
 
-##### C-02 高级筛选 query 写入 URL
-- 目标 URL: `/caregivers`
-- 预期 DOM:
-  搜索输入框
-  `搜索`
-  `重置筛选`
-- 预期前端交互:
-  输入关键词后点击 `搜索`
-  地址栏应带上 `?query=...&page=1`
-- 预期路由跳转:
-  仍停留 `/caregivers?...`
+服务端注册流程：
 
-##### C-03 区间筛选与枚举筛选可驱动路由参数
-- 目标 URL: `/caregivers`
-- 预期 DOM:
-  `年龄范围`
-  `从业年限`
-  `应用区间筛选`
-  `性别`
-  `住家意向`
-  `学历`
-- 预期前端交互:
-  填写区间后点击 `应用区间筛选`
-  点击徽标筛选项后 URL 应立即刷新参数
-- 预期路由跳转:
-  仍停留 `/caregivers?...`
+1. Zod 校验输入格式。
+2. 检查 `AdminAccount.email` / `AdminAccount.phone` 是否重复。
+3. 校验验证码是否存在、未消费、未过期、类型匹配。
+4. 使用 `bcrypt` 或 `argon2` 生成密码哈希。
+5. 创建 `AdminAccount`。
+6. 标记验证码为已消费。
+7. 引导跳转 `/login` 完成首次登录。
 
-##### C-04 列表卡片可进入详情页
-- 目标 URL: `/caregivers`
-- 预期 DOM:
-  若有数据则出现 `查看完整档案`
-  若无数据则出现 `没找到符合条件的阿姨，请尝试调整筛选条件。`
-- 预期前端交互:
-  当存在卡片时，点击首个 `查看完整档案`
-- 预期路由跳转:
-  `/caregivers/[id]`
+#### 3.2 登录
 
-#### 模块 D: 新建阿姨五步表单
+登录页 `/login` 使用：
 
-##### D-01 新建页基础骨架
-- 目标 URL: `/caregivers/new`
-- 预期 DOM:
-  `录入新阿姨`
-  `步骤 1 / 5: 基本信息`
-  `工号 *`
-  `姓名 *`
-  `手机号 *`
-  `身份证号 *`
-  `下一步`
-- 预期前端交互:
-  表单默认落在第 1 步
-- 预期路由跳转:
-  无
+- 邮箱
+- 密码
 
-##### D-02 第一步必填校验应阻止前进
-- 目标 URL: `/caregivers/new`
-- 预期 DOM:
-  `工号不能为空`
-  `姓名不能为空`
-  `请输入有效的11位手机号码`
-  `请输入有效的身份证号码`
-- 预期前端交互:
-  不填写或填写明显非法值后点击 `下一步`
-  应停留在步骤 1 并显示表单错误
-- 预期路由跳转:
-  无
+服务端登录流程：
 
-##### D-03 完整录入链路
-- 目标 URL: `/caregivers/new`
-- 预期 DOM:
-  步骤标题依次切换为
-  `基本信息`
-  `专业技能`
-  `详细介绍`
-  `证件与照片`
-  `拓展信息`
-  最终按钮 `立即创建`
-- 预期前端交互:
-  第 1 步录入合法基本信息后可进入后续步骤
-  第 2 步多选 Badge 可切换选中态
-  第 3 步文本域可输入
-  第 4 步若不上传图片也可继续
-  第 5 步点击 `立即创建` 后应触发创建动作
-  成功后 toast 应为 `护理员创建成功`
-- 预期路由跳转:
-  `/caregivers/new` -> `/caregivers/[newId]`
+1. Zod 校验输入。
+2. 按邮箱查询 `AdminAccount`。
+3. 校验 `status` 是否允许登录。
+4. 使用哈希校验函数对比密码。
+5. 签发 JWT Session。
+6. 写入 HttpOnly Cookie。
+7. 更新 `lastLoginAt`。
 
-#### 模块 E: 阿姨详情、编辑、时间线、派单入口
+### 4. 防重放与防爆破设计
 
-##### E-01 阿姨详情页基础信息渲染
-- 目标 URL: `/caregivers/[id]`
-- 前置条件: 需存在一名阿姨
-- 预期 DOM:
-  `返回列表`
-  `派单立项`
-  `编辑信息`
-  `最近工作状态`
-  `发布动态`
-  `专业技能图谱`
-  `备注说明`
-- 预期前端交互:
-  页面应展示详情模块和时间线发帖区
-- 预期路由跳转:
-  无
+#### 4.1 密码哈希
 
-##### E-02 时间线文本发布
-- 目标 URL: `/caregivers/[id]`
-- 预期 DOM:
-  `记录阿姨的最近工作表现、客户反馈等...`
-  `发布动态`
-- 预期前端交互:
-  填写文本后点击 `发布动态`
-  应出现成功反馈 `动态已发布`
-  列表中出现刚提交的文本
-- 预期路由跳转:
-  仍停留 `/caregivers/[id]`
+采用 `bcryptjs` 或 `argon2`：
 
-##### E-03 从详情页跳转派单
-- 目标 URL: `/caregivers/[id]`
-- 预期 DOM:
-  `派单立项`
-- 预期前端交互:
-  点击按钮后应跳至订单页，并自动打开新建订单弹窗
-- 预期路由跳转:
-  `/caregivers/[id]` -> `/orders?action=new...`
-  然后保留在 `/orders?...`
+1. 注册时使用安全成本参数生成哈希。
+2. 登录时使用常量时间比较函数校验密码。
+3. 代码内绝不出现明文默认管理员账号。
 
-##### E-04 编辑页加载已有信息
-- 目标 URL: `/caregivers/[id]/edit`
-- 预期 DOM:
-  `编辑护理员`
-  `保存修改`
-  已回填的 `工号`、`姓名`、`手机号`
-- 预期前端交互:
-  页面应加载现有字段，允许切换步骤
-- 预期路由跳转:
-  无
+MVP 取舍：
 
-#### 模块 F: 订单管理
+- 若部署环境对原生依赖敏感，优先 `bcryptjs`，降低构建摩擦。
+- 若环境稳定且允许原生依赖，可切换到 `argon2`。
 
-##### F-01 订单页基础骨架
-- 目标 URL: `/orders`
-- 预期 DOM:
-  `订单管理`
-  `查看和管理所有服务订单`
-  `新建订单`
-  搜索类型选择器
-  订单表格表头
-- 预期前端交互:
-  页面正常展示列表和顶部 CTA
-- 预期路由跳转:
-  无
+#### 4.2 邮箱验证码防刷
 
-##### F-02 新建订单弹窗基础联动
-- 目标 URL: `/orders`
-- 预期 DOM:
-  `录入新订单`
-  `家政员`
-  `客户`
-  `派单与财务`
-  `服务周期与时长`
-  `费用自动预估`
-  `提交正式订单`
-- 预期前端交互:
-  点击 `新建订单` 后打开弹窗
-  选择阿姨后自动回填姓名、手机号，若阿姨有月薪则自动回填月薪并折算日薪
-  修改开始日期/预计天数会联动结束日期
-  `应付总额 (¥)` 只读自动计算
-- 预期路由跳转:
-  仍停留 `/orders`
+发送接口 `/api/auth/send-code` 执行：
 
-##### F-03 新建订单必填校验
-- 目标 URL: `/orders`
-- 预期 DOM:
-  `请输入家政员姓名/工号`
-  `请输入客户姓名`
-  `请输入有效的11位手机号`
-  `请选择开始日期`
-  `请选择结束日期`
-- 预期前端交互:
-  空表单直接提交应显示前端错误
-- 预期路由跳转:
-  无
+1. 校验邮箱格式。
+2. 查询该邮箱同类型验证码最近 60 秒内是否已发送。
+3. 若命中限流，返回中文错误。
+4. 生成 6 位验证码。
+5. 只保存验证码哈希与过期时间，例如 10 分钟。
+6. 发送成功或进入模拟发送兜底后，再返回成功。
 
-##### F-04 从阿姨详情带参打开订单弹窗
-- 目标 URL: `/orders?action=new&caregiverId=...`
-- 预期 DOM:
-  新建订单弹窗自动打开
-  阿姨姓名 / 手机已预填
-- 预期前端交互:
-  弹窗打开状态由 query param 驱动
-  关闭弹窗后 `action=new` 参数应被 `router.replace(pathname)` 清理
-- 预期路由跳转:
-  `/orders?action=new...` -> 关闭后 `/orders`
+#### 4.3 验证码防重放
 
-##### F-05 创建订单成功
-- 目标 URL: `/orders`
-- 前置条件: 至少存在一名可选阿姨
-- 预期 DOM:
-  成功 toast `订单创建成功`
-  列表出现新订单号 / 客户名
-- 预期前端交互:
-  完整填写表单并提交
-- 预期路由跳转:
-  停留 `/orders`
+1. 每个验证码只允许使用一次。
+2. 注册成功后立即写入 `consumedAt`。
+3. 校验时只接受最近一条未消费、未过期记录。
+4. 过期验证码即使哈希匹配也拒绝。
 
-##### F-06 搜索类型切换与日期查询
-- 目标 URL: `/orders`
-- 预期 DOM:
-  搜索类型下拉含
-  `家政员姓名`
-  `客户姓名`
-  `派单员姓名`
-  `服务日期`
-  `全部字段`
-  `重置`
-- 预期前端交互:
-  切换到 `服务日期` 后输入区应变为日期选择器
-  点击搜索应刷新列表
-- 预期路由跳转:
-  无
+### 5. 高强度会话层
 
-##### F-07 编辑订单弹窗
-- 目标 URL: `/orders`
-- 前置条件: 至少存在一条未完成订单
-- 预期 DOM:
-  `修改订单信息`
-  `保存修改`
-- 预期前端交互:
-  点击铅笔图标打开编辑弹窗
-  已有订单信息应回填
-- 预期路由跳转:
-  无
+放弃现有 `auth_session=true` 明文 Cookie，改为：
 
-##### F-08 订单结单弹窗
-- 目标 URL: `/orders`
-- 前置条件: 至少存在一条未完成订单
-- 预期 DOM:
-  `订单结单结算`
-  `实际工作天数 (支持 0.5 天)`
-  `确认结单` 或 `确认部分结算`
-- 预期前端交互:
-  点击绿色结单图标打开弹窗
-  修改实际工作天数后总额联动
-- 预期路由跳转:
-  无
+1. 使用 `jose` 签发强签名 JWT。
+2. Cookie 名称改为 `admin_session`。
+3. Cookie 仅通过 HttpOnly + SameSite + Secure 下发。
+4. JWT Payload 至少包含：
+   - `sub`：管理员 ID
+   - `email`
+   - `role`
+5. JWT 设置明确过期时间，例如 7 天。
+6. 中间件与服务端共用统一解析函数。
 
-##### F-09 非法结单输入被前端拦截
-- 目标 URL: `/orders`
-- 预期 DOM:
-  错误 toast `请输入有效的工作天数`
-- 预期前端交互:
-  将工作天数输入为负数后点击确认
-  应阻止提交
-- 预期路由跳转:
-  无
+环境变量规划：
 
-##### F-10 删除订单弹窗可打开但不执行 destructive 确认
-- 目标 URL: `/orders`
-- 预期 DOM:
-  `确认删除订单？`
-  `确认删除`
-  `取消`
-- 预期前端交互:
-  仅验证弹窗出现，再关闭
-- 预期路由跳转:
-  无
+- `AUTH_JWT_SECRET`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
 
-#### 模块 G: 月度薪资结算中心
+开发兜底：
 
-##### G-01 结算中心基础骨架
-- 目标 URL: `/salary-settlement`
-- 预期 DOM:
-  `薪资结算中心`
-  `查询范围`
-  `结算月份`
-  `查询`
-  `本月待结总额`
-  `本月待结人数`
-  `可直接生成结算单`
-  `跨月订单数量`
-- 预期前端交互:
-  页面初次加载自动拉取候选列表和历史记录
-- 预期路由跳转:
-  无
+1. 若未配置 SMTP，则打印系统级模拟邮件日志到终端。
+2. 若未配置 `AUTH_JWT_SECRET` 且处于开发环境，允许使用仅限本地的兜底 secret，并打印警告。
+3. 生产环境必须要求显式 `AUTH_JWT_SECRET`。
 
-##### G-02 标签页切换
-- 目标 URL: `/salary-settlement`
-- 预期 DOM:
-  `结算计算`
-  `已生成记录`
-- 预期前端交互:
-  在两个 Tab 间切换，列表内容同步切换
-- 预期路由跳转:
-  无
+### 6. 路由守卫重构
 
-##### G-03 候选结算详情弹窗
-- 目标 URL: `/salary-settlement`
-- 前置条件: 候选列表至少有 1 条
-- 预期 DOM:
-  `薪资结算详情`
-  `本月有效订单明细`
-  `确认生成结算单` 或 `请先完成订单结单`
-- 预期前端交互:
-  点击 `去结算` / `查看详情` / `更新/重算` 均可打开详情弹窗
-  若存在未结单订单，弹窗应出现红色阻断提示并提供 `前往订单管理`
-- 预期路由跳转:
-  点击 `前往订单管理` 时跳转 `/orders`
+重写 `src/middleware.ts`：
 
-##### G-04 历史结算详情弹窗
-- 目标 URL: `/salary-settlement`
-- 前置条件: 历史记录至少有 1 条
-- 预期 DOM:
-  `已生成的结算单`
-  `查看完整信息`
-- 预期前端交互:
-  在历史 Tab 点击 `查看完整信息`，应打开详情弹窗
-- 预期路由跳转:
-  无
+1. 放行公开路由：
+   - `/login`
+   - `/register`
+   - `/api/auth/send-code`
+   - `/_next/*`
+   - `/favicon.ico`
+2. 对其余后台页面解析并校验 JWT。
+3. 无有效会话则跳转 `/login`。
+4. 已登录用户访问 `/login` 或 `/register` 时反向跳转 `/`。
 
-#### 模块 H: 动态字段设置
+同时补一层服务端读取工具，供 Layout / Server Action 做防御式校验。
 
-##### H-01 字段设置页基础骨架
-- 目标 URL: `/settings/fields`
-- 预期 DOM:
-  `字段自定义设置`
-  `字段配置预览`
-  `添加新字段`
-  `基本信息扩展`
-  `专业技能扩展`
-- 预期前端交互:
-  页面显示两组 Tab 与字段列表
-- 预期路由跳转:
-  无
+### 7. 文件落位规划
 
-##### H-02 新增字段弹窗校验与创建
-- 目标 URL: `/settings/fields`
-- 预期 DOM:
-  `添加字段`
-  `显示名称`
-  `字段类型`
-  `保存`
-- 预期前端交互:
-  空显示名称点击保存应出现 toast `显示名称不能为空`
-  填写显示名称后保存，应出现成功 toast `字段添加成功`
-  列表中出现新字段
-- 预期路由跳转:
-  无
+#### 7.1 Prisma
 
-##### H-03 Select 类型字段可填写选项
-- 目标 URL: `/settings/fields`
-- 预期 DOM:
-  选择 `下拉单选 (Select)` 后显示 `选项`
-- 预期前端交互:
-  切换字段类型时动态显示/隐藏选项输入框
-- 预期路由跳转:
-  无
+- `prisma/schema.prisma`
+- `prisma/migrations/*`
 
-##### H-04 编辑字段弹窗
-- 目标 URL: `/settings/fields`
-- 前置条件: 至少存在 1 个字段
-- 预期 DOM:
-  `编辑字段`
-  `字段Key`
-  `保存`
-- 预期前端交互:
-  点击铅笔图标打开编辑弹窗
-  `字段Key` 为禁用只读
-- 预期路由跳转:
-  无
+#### 7.2 Auth 基础设施
 
-##### H-05 删除字段弹窗或 confirm 拦截
-- 目标 URL: `/settings/fields`
-- 前置条件: 至少存在 1 个字段
-- 预期 DOM:
-  浏览器 confirm 文案 `确定删除此字段吗？历史数据可能无法显示。`
-- 预期前端交互:
-  仅验证 confirm 出现，然后取消，不执行删除
-- 预期路由跳转:
-  无
+- `src/lib/auth/password.ts`
+- `src/lib/auth/session.ts`
+- `src/lib/auth/verification.ts`
+- `src/lib/auth/mailer.ts`
 
-### 4. 本轮建议实际执行范围
+#### 7.3 Auth Feature
 
-1. 必跑通过项
-   A-01, A-02, A-03, B-01, B-02, C-01, C-02, D-01, D-02, E-01, E-03, F-01, F-02, F-04, F-06, G-01, G-02, H-01, H-02, H-03
-2. 条件允许时追加
-   C-04, D-03, E-02, E-04, F-05, F-07, F-08, F-09, F-10, G-03, G-04, H-04, H-05
-3. destructive 风险控制
-   删除类操作只验证弹窗，不做最终确认。
+- `src/features/auth/schema.ts`
+- `src/features/auth/actions.ts`
+
+#### 7.4 路由与页面
+
+- `src/app/login/page.tsx`
+- `src/app/register/page.tsx`
+- `src/app/api/auth/send-code/route.ts`
+- `src/middleware.ts`
+
+### 8. 自动化验收路径
+
+最终用 Playwright MCP 验证以下闭环：
+
+1. 访问 `/register`。
+2. 填写邮箱并请求验证码。
+3. 从终端日志读取模拟邮件验证码。
+4. 完成注册。
+5. 跳转或进入 `/login`。
+6. 使用新邮箱 + 密码登录。
+7. 成功访问 `/` 与其他受保护后台页面。
+8. 验证未登录访问私有路由时会被打回 `/login`。
+
+### 9. 明确废止项
+
+以下旧实现必须彻底失效：
+
+1. `吴博闻 / 123456` 硬编码凭证。
+2. `auth_session=true` 明文 Cookie。
+3. 仅凭 Cookie 存在性判断已登录的中间件逻辑。
+4. 将业务 `User` 表误当作管理员认证表的任何做法。

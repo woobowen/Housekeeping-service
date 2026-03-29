@@ -70,7 +70,8 @@ async function shutdownDevServer(pid: number): Promise<void> {
   tryKillSingleProcess(pid, "SIGKILL");
 }
 
-export default async function globalTeardown(_: FullConfig): Promise<void> {
+export default async function globalTeardown(config: FullConfig): Promise<void> {
+  void config;
   const state: DevServerState | null = await readState();
 
   if (!state) {

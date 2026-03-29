@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -54,10 +54,14 @@ function FilterRow({ label, options, currentValue, onSelect }: FilterRowProps) {
   );
 }
 
-export function ComprehensiveFilter() {
+type ComprehensiveFilterFormProps = {
+  pathname: string;
+  searchParamsString: string;
+};
+
+function ComprehensiveFilterForm({ pathname, searchParamsString }: ComprehensiveFilterFormProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams = new URLSearchParams(searchParamsString);
 
   // Local state for inputs that shouldn't trigger immediately
   const [searchTerm, setSearchTerm] = useState(searchParams.get('query') || '');
@@ -65,15 +69,6 @@ export function ComprehensiveFilter() {
   const [maxAge, setMaxAge] = useState(searchParams.get('maxAge') || '');
   const [minExp, setMinExp] = useState(searchParams.get('minExperience') || '');
   const [maxExp, setMaxExp] = useState(searchParams.get('maxExperience') || '');
-
-  // Sync local state when URL changes
-  useEffect(() => {
-    setSearchTerm(searchParams.get('query') || '');
-    setMinAge(searchParams.get('minAge') || '');
-    setMaxAge(searchParams.get('maxAge') || '');
-    setMinExp(searchParams.get('minExperience') || '');
-    setMaxExp(searchParams.get('maxExperience') || '');
-  }, [searchParams]);
 
   const updateParam = (key: string, value: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -96,9 +91,6 @@ export function ComprehensiveFilter() {
 
   const clearAll = () => {
     router.replace(pathname);
-    setSearchTerm('');
-    setMinAge(''); setMaxAge('');
-    setMinExp(''); setMaxExp('');
   };
 
   return (
@@ -199,5 +191,19 @@ export function ComprehensiveFilter() {
 
       </CardContent>
     </Card>
+  );
+}
+
+export function ComprehensiveFilter() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+
+  return (
+    <ComprehensiveFilterForm
+      key={searchParamsString}
+      pathname={pathname}
+      searchParamsString={searchParamsString}
+    />
   );
 }

@@ -2,6 +2,8 @@
 
 import { db } from '@/lib/prisma';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { requireAdminSession } from '@/lib/auth/session';
 
 export type FieldDefinitionDTO = {
   targetModel: string;
@@ -13,19 +15,30 @@ export type FieldDefinitionDTO = {
   order?: number;
 };
 
+const fieldDefinitionSchema = z.object({
+  targetModel: z.enum(['Caregiver', 'Order']),
+  name: z.string().trim().min(1, '字段 key 不能为空').max(50, '字段 key 过长').regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, '字段 key 只能使用字母、数字和下划线'),
+  label: z.string().trim().min(1, '字段名称不能为空').max(50, '字段名称过长'),
+  type: z.enum(['TEXT', 'NUMBER', 'SELECT', 'DATE', 'BOOLEAN']),
+  options: z.array(z.string().trim().min(1).max(50)).optional(),
+  required: z.boolean().optional(),
+  order: z.number().int().min(0).max(9999).optional(),
+});
+
 export async function addField(data: FieldDefinitionDTO) {
   try {
-    // Basic validation
-    if (!data.targetModel || !data.name || !data.label || !data.type) {
-      return { success: false, message: 'Missing required fields' };
+    await requireAdminSession();
+    const parsed = fieldDefinitionSchema.safeParse(data);
+    if (!parsed.success) {
+      return { success: false, message: parsed.error.issues[0]?.message || '字段配置不合法' };
     }
 
     // Check if name exists for this model
     const existing = await db.systemFieldDefinition.findUnique({
       where: {
         targetModel_name: {
-          targetModel: data.targetModel,
-          name: data.name,
+          targetModel: parsed.data.targetModel,
+          name: parsed.data.name,
         },
       },
     });
@@ -36,13 +49,13 @@ export async function addField(data: FieldDefinitionDTO) {
 
     await db.systemFieldDefinition.create({
       data: {
-        targetModel: data.targetModel,
-        name: data.name,
-        label: data.label,
-        type: data.type,
-        options: data.options ? JSON.stringify(data.options) : undefined,
-        required: data.required || false,
-        order: data.order || 0,
+        targetModel: parsed.data.targetModel,
+        name: parsed.data.name,
+        label: parsed.data.label,
+        type: parsed.data.type,
+        options: parsed.data.options ? JSON.stringify(parsed.data.options) : undefined,
+        required: parsed.data.required || false,
+        order: parsed.data.order || 0,
       },
     });
 
@@ -56,6 +69,7 @@ export async function addField(data: FieldDefinitionDTO) {
 
 export async function deleteField(id: string) {
   try {
+    await requireAdminSession();
     await db.systemFieldDefinition.delete({
       where: { id },
     });
@@ -68,6 +82,7 @@ export async function deleteField(id: string) {
 
 export async function getFields(targetModel: string) {
   try {
+    await requireAdminSession();
     const fields = await db.systemFieldDefinition.findMany({
       where: { targetModel },
       orderBy: { order: 'asc' },

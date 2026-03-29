@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useTransition, useEffect, useRef } from 'react';
+import { useForm, useWatch, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { format } from 'date-fns';
 import { Loader2, X, Plus, Upload, Trash2 } from 'lucide-react';
@@ -21,7 +21,6 @@ import {
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -36,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { DatePicker } from '@/components/ui/date-picker';
 
 import { createCaregiver, updateCaregiver } from '../actions';
@@ -50,6 +48,7 @@ import {
   type CaregiverFormValues,
   defaultCaregiverValues,
 } from '../schema';
+import type { DynamicFieldDefinition } from '../types';
 
 const SUZHOU_AREAS = [
   "工业园区", "姑苏区", "虎丘区/高新区", "吴中区", "相城区", "吴江区", "昆山市", "太仓市", "张家港市", "常熟市"
@@ -73,21 +72,34 @@ const STEPS = [
 ];
 
 interface CaregiverFormProps {
-  initialData?: any;
+  initialData?: Partial<CaregiverFormValues> & { idString?: string };
 }
 
 export function CaregiverForm({ initialData }: CaregiverFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPending, startTransition] = useTransition();
   const [dynamicFields, setDynamicFields] = useState<FieldDefinition[]>([]);
-  const [customValues, setCustomValues] = useState<Record<string, any>>({});
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>(() => {
+    if (!initialData?.customData) {
+      return {};
+    }
+
+    try {
+      return typeof initialData.customData === 'string'
+        ? JSON.parse(initialData.customData) as Record<string, unknown>
+        : initialData.customData;
+    } catch {
+      return {};
+    }
+  });
   const [filesMap, setFilesMap] = useState<Record<string, File>>({});
+  const filesMapRef = useRef<Record<string, File>>({});
   
   const router = useRouter();
   const isEdit = !!initialData;
 
   const form = useForm<CaregiverFormValues>({
-    resolver: zodResolver(caregiverFormSchema) as any,
+    resolver: zodResolver(caregiverFormSchema) as Resolver<CaregiverFormValues>,
     defaultValues: {
       ...defaultCaregiverValues,
       workerId: initialData?.workerId || "",
@@ -125,29 +137,49 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
     },
   });
 
+  const avatarUrl = useWatch({ control: form.control, name: 'avatarUrl' });
+  const idCardFrontUrl = useWatch({ control: form.control, name: 'idCardFrontUrl' });
+  const idCardBackUrl = useWatch({ control: form.control, name: 'idCardBackUrl' });
+  const healthCertImages = useWatch({ control: form.control, name: 'healthCertImages' }) || [];
+  const lifeImages = useWatch({ control: form.control, name: 'lifeImages' }) || [];
+
   useEffect(() => {
-    getGlobalFieldConfig().then((config) => {
-      const allFields = [...(config.sections.basic_info || []), ...(config.sections.skills || [])];
-      setDynamicFields(allFields as FieldDefinition[]);
-    });
+    filesMapRef.current = filesMap;
+  }, [filesMap]);
 
-    if (initialData?.customData) {
-      try {
-        setCustomValues(JSON.parse(initialData.customData));
-      } catch (e) { console.error(e); }
-    }
-
+  useEffect(() => {
     if (initialData?.currentResidence) {
       form.setValue('currentResidence', initialData.currentResidence);
     }
+  }, [initialData, form]);
 
-    // Cleanup blob URLs on unmount
+  useEffect(() => {
+    let mounted = true;
+
+    const loadGlobalFields = async (): Promise<void> => {
+      const config = await getGlobalFieldConfig();
+      if (!mounted) {
+        return;
+      }
+
+      const allFields: DynamicFieldDefinition[] = [
+        ...(config.sections.basic_info || []),
+        ...(config.sections.skills || []),
+      ];
+      setDynamicFields(allFields);
+    };
+
+    void loadGlobalFields();
+
     return () => {
-      Object.keys(filesMap).forEach(url => {
-        if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+      mounted = false;
+      Object.keys(filesMapRef.current).forEach((url: string) => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
       });
     };
-  }, [initialData, form]);
+  }, []);
 
   const handleNext = async () => {
     let fieldsToValidate: (keyof CaregiverFormValues)[] = [];
@@ -167,7 +199,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
       const file = files[0];
       const url = URL.createObjectURL(file);
       setFilesMap(prev => ({ ...prev, [url]: file }));
-      form.setValue(fieldName, url as any);
+      form.setValue(fieldName, url as never);
       return;
     }
 
@@ -182,8 +214,8 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
     }
     
     setFilesMap(newFilesMap);
-    const currentValues = (form.getValues(fieldName) as string[]) || [];
-    form.setValue(fieldName, [...currentValues, ...newUrls] as any);
+    const currentValues = form.getValues(fieldName) as string[] | undefined;
+    form.setValue(fieldName, [...(currentValues || []), ...newUrls] as never);
   };
 
   const removeImage = (fieldName: keyof CaregiverFormValues, index: number) => {
@@ -201,7 +233,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
       return;
     }
 
-    const currentValues = form.getValues(fieldName) as string[];
+    const currentValues = (form.getValues(fieldName) as string[] | undefined) || [];
     const urlToRemove = currentValues[index];
     
     if (urlToRemove.startsWith('blob:')) {
@@ -213,7 +245,7 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
 
     const newValues = [...currentValues];
     newValues.splice(index, 1);
-    form.setValue(fieldName, newValues as any);
+    form.setValue(fieldName, newValues as never);
   };
 
   const onSubmit = (data: CaregiverFormValues) => {
@@ -335,9 +367,10 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
               <div className="flex flex-col items-center justify-center space-y-4 mb-8">
                 <FormLabel>头像</FormLabel>
                 <div className="relative w-32 h-32 rounded-2xl border-2 border-dashed border-slate-300 overflow-hidden group hover:border-primary transition-colors">
-                  {form.watch('avatarUrl') ? (
+                  {avatarUrl ? (
                     <>
-                      <img src={form.watch('avatarUrl')!} className="w-full h-full object-cover" alt="头像" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={avatarUrl} className="w-full h-full object-cover" alt="头像" />
                       <button type="button" onClick={() => removeImage('avatarUrl', 0)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <Trash2 className="w-6 h-6 text-white" />
                       </button>
@@ -443,9 +476,10 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                  <div className="space-y-3">
                    <FormLabel>身份证正面</FormLabel>
                    <div className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-slate-300 overflow-hidden group hover:border-primary transition-colors bg-white">
-                     {form.watch('idCardFrontUrl') ? (
+                     {idCardFrontUrl ? (
                        <>
-                         <img src={form.watch('idCardFrontUrl')!} className="w-full h-full object-cover" alt="身份证正面" />
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img src={idCardFrontUrl} className="w-full h-full object-cover" alt="身份证正面" />
                          <button type="button" onClick={() => removeImage('idCardFrontUrl', 0)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                            <Trash2 className="w-6 h-6 text-white" />
                          </button>
@@ -463,9 +497,10 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                  <div className="space-y-3">
                    <FormLabel>身份证反面</FormLabel>
                    <div className="relative aspect-[4/3] rounded-xl border-2 border-dashed border-slate-300 overflow-hidden group hover:border-primary transition-colors bg-white">
-                     {form.watch('idCardBackUrl') ? (
+                     {idCardBackUrl ? (
                        <>
-                         <img src={form.watch('idCardBackUrl')!} className="w-full h-full object-cover" alt="身份证反面" />
+                         {/* eslint-disable-next-line @next/next/no-img-element */}
+                         <img src={idCardBackUrl} className="w-full h-full object-cover" alt="身份证反面" />
                          <button type="button" onClick={() => removeImage('idCardBackUrl', 0)} className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                            <Trash2 className="w-6 h-6 text-white" />
                          </button>
@@ -484,8 +519,9 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                <div className="space-y-4">
                  <FormLabel>健康证/体检表</FormLabel>
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {form.watch('healthCertImages')?.map((url, i) => (
+                    {healthCertImages.map((url, i) => (
                       <div key={i} className="relative aspect-[3/4] rounded-lg border overflow-hidden group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={url} className="w-full h-full object-cover" alt="健康证" />
                         <button type="button" onClick={() => removeImage('healthCertImages', i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
                       </div>
@@ -501,8 +537,9 @@ export function CaregiverForm({ initialData }: CaregiverFormProps) {
                <div className="space-y-4">
                  <FormLabel>照片</FormLabel>
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {form.watch('lifeImages')?.map((url, i) => (
+                    {lifeImages.map((url, i) => (
                       <div key={i} className="relative aspect-square rounded-lg border overflow-hidden group">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={url} className="w-full h-full object-cover" alt="照片" />
                         <button type="button" onClick={() => removeImage('lifeImages', i)} className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
                       </div>

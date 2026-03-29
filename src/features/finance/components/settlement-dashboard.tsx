@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useCallback, useEffect, useTransition, useState } from 'react';
 import { format } from 'date-fns';
 import { 
   Calculator, 
@@ -36,7 +36,21 @@ import { Badge } from '@/components/ui/badge';
 
 import { getSettlementCandidates, getSettlementHistory } from '../actions';
 import { SettlementDetailModal } from './settlement-detail-modal';
-import type { SettlementDetail } from '../schema';
+import type { SettlementDetail, SettlementItem } from '../schema';
+
+type SettlementHistoryRecord = {
+  id: string;
+  caregiverId: string;
+  month: string;
+  totalAmount: number | string;
+  status: 'PENDING' | 'SETTLED' | 'PAID';
+  details: string | null;
+  createdAt: string | Date;
+  caregiver?: {
+    name: string | null;
+    workerId: string | null;
+  } | null;
+};
 
 export function SettlementDashboard() {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
@@ -45,14 +59,14 @@ export function SettlementDashboard() {
   const [candidates, setCandidates] = useState<SettlementDetail[]>([]);
   
   // History = Raw DB records (for the history tab)
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<SettlementHistoryRecord[]>([]);
   
   const [isPending, startTransition] = useTransition();
   const [selectedDetail, setSelectedDetail] = useState<SettlementDetail | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [receiptMessage, setReceiptMessage] = useState('');
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     startTransition(async () => {
       const [resCandidates, resHistory] = await Promise.all([
         getSettlementCandidates(selectedMonth),
@@ -60,17 +74,17 @@ export function SettlementDashboard() {
       ]);
 
       if (resCandidates.success) setCandidates(resCandidates.data as SettlementDetail[]);
-      if (resHistory.success) setHistory(resHistory.data);
+      if (resHistory.success) setHistory((resHistory.data as unknown as SettlementHistoryRecord[]) ?? []);
       
       if (!resCandidates.success || !resHistory.success) {
         toast.error('获取数据失败');
       }
     });
-  };
+  }, [selectedMonth]);
 
   useEffect(() => {
     fetchData();
-  }, [selectedMonth]);
+  }, [fetchData]);
 
   const handleOpenDetail = (detail: SettlementDetail) => {
     setSelectedDetail(detail);
@@ -78,7 +92,7 @@ export function SettlementDashboard() {
   };
 
   // Adapter for History Records to SettlementDetail
-  const handleOpenHistory = (record: any) => {
+  const handleOpenHistory = (record: SettlementHistoryRecord) => {
     const detail: SettlementDetail = {
         caregiverId: record.caregiverId,
         caregiverName: record.caregiver?.name || '未知',
@@ -95,9 +109,9 @@ export function SettlementDashboard() {
 
     try {
         if (record.details) {
-            const items = JSON.parse(record.details);
+            const items = JSON.parse(record.details) as SettlementItem[];
             detail.items = items;
-            detail.totalDays = items.reduce((acc: number, item: any) => acc + (item.daysInMonth || 0), 0);
+            detail.totalDays = items.reduce((acc, item) => acc + (item.daysInMonth || 0), 0);
             detail.orderCount = items.length;
         }
     } catch (e) {

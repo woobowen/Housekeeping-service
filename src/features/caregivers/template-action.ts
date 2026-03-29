@@ -2,8 +2,10 @@
 
 import ExcelJS from 'exceljs';
 import { getGlobalFieldConfig } from '@/features/system/actions';
+import { requireAdminSession } from '@/lib/auth/session';
 
 export async function downloadImportTemplate() {
+  await requireAdminSession();
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('护理员导入模板');
   

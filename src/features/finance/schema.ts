@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export type SettlementStatus = 'FULL' | 'PARTIAL'; // For individual order items
 export type SettlementState = 'PENDING' | 'SETTLED' | 'PAID'; // For the whole settlement record
 

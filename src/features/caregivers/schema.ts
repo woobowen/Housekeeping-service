@@ -48,6 +48,7 @@ export const caregiverFormSchema = z.object({
   // --- Optional Professional Info ---
   experienceYears: z.coerce.number().optional().nullable(),
   isLiveIn: z.string().optional().nullable(),
+  isTrainee: z.coerce.boolean().optional().default(false),
 
   // Skills (JSON Lists)
   jobTypes: z.array(z.string()).default([]),
@@ -88,6 +89,7 @@ export const defaultCaregiverValues: Partial<CaregiverFormValues> = {
   phone: '',
   idCardNumber: '',
   gender: '女',
+  isTrainee: false,
   jobTypes: [],
   specialties: [],
   cookingSkills: [],

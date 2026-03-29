@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/prisma';
+import { z } from 'zod';
+import { requireAdminSession } from '@/lib/auth/session';
 
 const GLOBAL_CONFIG_KEY = 'caregiver_metadata';
 
@@ -24,6 +26,14 @@ export interface GlobalFieldConfig {
   sections: SectionConfig;
 }
 
+const fieldDefinitionSchema = z.object({
+  name: z.string().trim().min(1, '字段 key 不能为空').max(50, '字段 key 过长').regex(/^[a-zA-Z][a-zA-Z0-9_]*$/, '字段 key 只能使用字母、数字和下划线'),
+  label: z.string().trim().min(1, '字段名称不能为空').max(50, '字段名称过长'),
+  type: z.enum(['text', 'number', 'date', 'select', 'boolean']),
+  options: z.array(z.string().trim().min(1).max(50)).optional(),
+  required: z.boolean().optional(),
+});
+
 const DEFAULT_CONFIG: GlobalFieldConfig = {
   sections: {
     basic_info: [],
@@ -37,6 +47,7 @@ const DEFAULT_CONFIG: GlobalFieldConfig = {
  */
 export async function getGlobalFieldConfig(): Promise<GlobalFieldConfig> {
   try {
+    await requireAdminSession();
     const setting = await db.systemSettings.findUnique({
       where: { key: GLOBAL_CONFIG_KEY },
     });
@@ -73,6 +84,12 @@ export async function addGlobalField(
   fieldDef: FieldDefinition
 ) {
   try {
+    await requireAdminSession();
+    const parsedField = fieldDefinitionSchema.safeParse(fieldDef);
+    if (!parsedField.success) {
+      return { success: false, message: parsedField.error.issues[0]?.message || '字段定义不合法' };
+    }
+
     const currentConfig = await getGlobalFieldConfig();
 
     if (!currentConfig.sections[section]) {
@@ -81,14 +98,14 @@ export async function addGlobalField(
 
     // Check for duplicates
     const exists = currentConfig.sections[section].some(
-      (f) => f.name === fieldDef.name
+      (f) => f.name === parsedField.data.name
     );
 
     if (exists) {
-      return { success: false, message: `Field key "${fieldDef.name}" already exists in this section.` };
+      return { success: false, message: `Field key "${parsedField.data.name}" already exists in this section.` };
     }
 
-    currentConfig.sections[section].push(fieldDef);
+    currentConfig.sections[section].push(parsedField.data);
 
     await db.systemSettings.upsert({
       where: { key: GLOBAL_CONFIG_KEY },
@@ -121,6 +138,12 @@ export async function updateGlobalField(
   newData: FieldDefinition
 ) {
   try {
+    await requireAdminSession();
+    const parsedField = fieldDefinitionSchema.safeParse(newData);
+    if (!parsedField.success) {
+      return { success: false, message: parsedField.error.issues[0]?.message || '字段定义不合法' };
+    }
+
     const currentConfig = await getGlobalFieldConfig();
 
     if (!currentConfig.sections[section]) {
@@ -140,7 +163,7 @@ export async function updateGlobalField(
     // but the requirement says key is read-only in UI. 
     // newData should ideally carry the same name, or we force it here.
     currentConfig.sections[section][fieldIndex] = {
-      ...newData,
+      ...parsedField.data,
       name: key, // Ensure key immutability from this action's perspective
     };
 
@@ -174,6 +197,7 @@ export async function removeGlobalField(
   fieldName: string
 ) {
   try {
+    await requireAdminSession();
     const currentConfig = await getGlobalFieldConfig();
 
     if (!currentConfig.sections[section]) {

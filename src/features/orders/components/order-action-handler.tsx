@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useMemo, useState, Suspense } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { CreateOrderModal } from './create-order-modal';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import type { CaregiverOption } from '@/features/caregivers/actions';
+import type { OrderFormDefaultValues } from './order-form';
 
 interface OrderActionHandlerProps {
   caregiverOptions: CaregiverOption[];
@@ -22,15 +23,16 @@ function OrderActionHandlerContent({ caregiverOptions }: OrderActionHandlerProps
   const caregiverName = searchParams.get('caregiverName');
   const caregiverPhone = searchParams.get('caregiverPhone');
 
-  useEffect(() => {
-    if (action === 'new') {
-      setOpen(true);
-    }
-  }, [action]);
+  const forceOpenFromUrl: boolean = action === 'new';
+  const initialData: Partial<OrderFormDefaultValues> = useMemo(() => ({
+    caregiverId: caregiverId || '',
+    caregiverName: caregiverName || caregiverId || '',
+    caregiverPhone: caregiverPhone || '',
+  }), [caregiverId, caregiverName, caregiverPhone]);
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
-    if (!newOpen && action === 'new') {
+    if (!newOpen && forceOpenFromUrl) {
       // Clear URL params when closing
       router.replace(pathname);
     }
@@ -43,14 +45,10 @@ function OrderActionHandlerContent({ caregiverOptions }: OrderActionHandlerProps
         新建订单
       </Button>
       <CreateOrderModal 
-        open={open} 
+        open={open || forceOpenFromUrl} 
         onOpenChange={handleOpenChange} 
         caregiverOptions={caregiverOptions}
-        initialData={{
-            caregiverId: caregiverId || '',
-            caregiverName: caregiverName || caregiverId || '',
-            caregiverPhone: caregiverPhone || '',
-        }}
+        initialData={initialData}
       />
     </>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useTransition, useEffect } from 'react';
+import { useState, useMemo, useTransition } from 'react';
 import { toast } from 'sonner';
 import { 
   Calculator, 
@@ -30,15 +30,36 @@ import { settleOrder } from '../actions';
 import { useRouter } from 'next/navigation';
 
 interface SettleOrderModalProps {
-  order: any;
+  order: SettleOrderItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface SettleOrderItem {
+  id: string;
+  caregiverId?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  clientName?: string;
+  clientPhone?: string;
+  clientLocation?: string;
+  dispatcherName?: string;
+  dispatcherPhone?: string;
+  endDate: string | Date;
+  startDate: string | Date;
+  totalAmount?: number | string | null;
+  status?: string;
+  durationDays?: number | null;
+  dailySalary?: number | string | null;
+  monthlySalary?: number | string | null;
+  managementFee?: number | string | null;
 }
 
 export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModalProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const currentMonth = format(new Date(), 'yyyy-MM');
+  const orderId = order?.id ?? '';
   
   // Detection for Cross-Month
   const isCrossMonth = useMemo(() => {
@@ -60,26 +81,20 @@ export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModal
 
   // 中文说明：弹窗复用同一个组件实例时，默认天数必须随当前订单实时重算，
   // 否则会沿用上一次打开时的旧 state，导致出现错误的 0 天默认值。
-  const [actualDays, setActualDays] = useState<string>('0');
-
-  useEffect(() => {
-    if (!order || !open) {
-      return;
-    }
-
-    const nextDefaultDays = isCrossMonth ? expectedDaysInMonth : (order.durationDays || 0);
-    setActualDays(String(nextDefaultDays > 0 ? nextDefaultDays : 0));
-  }, [expectedDaysInMonth, isCrossMonth, open, order]);
+  const initialActualDays: string = String(
+    Math.max(isCrossMonth ? expectedDaysInMonth : (order?.durationDays || 0), 0)
+  );
+  const [actualDaysByOrder, setActualDaysByOrder] = useState<Record<string, string>>({});
+  const actualDays = orderId ? (actualDaysByOrder[orderId] ?? initialActualDays) : initialActualDays;
 
   if (!order) return null;
 
   const dailySalary = Number(order.dailySalary) || Math.round(Number(order.monthlySalary || 0) / 26);
   const managementFee = Number(order.managementFee) || 0;
-
-  const totalAmount = useMemo(() => {
+  const totalAmount = (() => {
     const days = parseFloat(actualDays) || 0;
     return Math.round((dailySalary * days + managementFee) * 100) / 100;
-  }, [dailySalary, actualDays, managementFee]);
+  })();
 
   const handleSettle = () => {
     const daysNum = parseFloat(actualDays);
@@ -158,7 +173,13 @@ export function SettleOrderModal({ order, open, onOpenChange }: SettleOrderModal
                 type="number"
                 step="0.1"
                 value={actualDays}
-                onChange={(e) => setActualDays(e.target.value)}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  setActualDaysByOrder((current) => ({
+                    ...current,
+                    [order.id]: nextValue,
+                  }));
+                }}
                 className="pr-10 h-12 text-lg font-bold border-blue-200 focus:border-blue-400"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">天</span>

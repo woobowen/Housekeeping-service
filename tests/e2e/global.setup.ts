@@ -29,6 +29,7 @@ const RUNTIME_ROOT: string = path.join(ARTIFACTS_ROOT, "runtime");
 const LOG_ROOT: string = path.join(ARTIFACTS_ROOT, "logs");
 const PID_FILE: string = path.join(RUNTIME_ROOT, "dev-server.json");
 const DEV_SERVER_LOG_FILE: string = path.join(LOG_ROOT, "dev-server.log");
+const NEXT_BIN_JS: string = path.join(PROJECT_ROOT, "node_modules", "next", "dist", "bin", "next");
 
 async function ensureDirectory(dirPath: string): Promise<void> {
   await fs.mkdir(dirPath, { recursive: true });
@@ -211,18 +212,22 @@ async function startDevServer(): Promise<number> {
   await ensureDirectory(LOG_ROOT);
 
   const child = spawn(
-    "bash",
+    process.execPath,
     [
-      "-lc",
-      "source ~/.nvm/nvm.sh && npm run dev:fixed",
+      NEXT_BIN_JS,
+      "dev",
+      "--webpack",
+      "--port",
+      String(PORT),
     ],
     {
       cwd: PROJECT_ROOT,
-      detached: true,
+      detached: false,
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         PORT: String(PORT),
+        ENABLE_E2E_DEBUG: "1",
       },
     },
   );
@@ -235,7 +240,13 @@ async function startDevServer(): Promise<number> {
     void appendLogLine(chunk.toString("utf8").trimEnd());
   });
 
-  child.unref();
+  child.once("error", (error: Error): void => {
+    void appendLogLine(`child-error: ${error.message}`);
+  });
+
+  child.once("exit", (code: number | null, signal: NodeJS.Signals | null): void => {
+    void appendLogLine(`child-exit: code=${String(code)} signal=${String(signal)}`);
+  });
 
   if (!child.pid) {
     throw new Error("启动 Next dev 失败，未拿到子进程 PID");
@@ -261,7 +272,8 @@ async function preflightGuard(): Promise<void> {
   }
 }
 
-export default async function globalSetup(_: FullConfig): Promise<void> {
+export default async function globalSetup(config: FullConfig): Promise<void> {
+  void config;
   await ensureDirectory(ARTIFACTS_ROOT);
   await ensureDirectory(RUNTIME_ROOT);
   await ensureDirectory(LOG_ROOT);

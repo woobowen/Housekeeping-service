@@ -8,8 +8,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { CalendarIcon } from 'lucide-react';
-import { format, parse } from 'date-fns';
+import { format, isValid, parse } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { FormControl } from '@/components/ui/form';
 
 export type FieldDefinition = {
   id?: string;
@@ -22,8 +23,8 @@ export type FieldDefinition = {
 
 interface DynamicFieldRendererProps {
   fields: FieldDefinition[];
-  values: Record<string, any>;
-  onChange: (key: string, value: any) => void;
+  values: Record<string, unknown>;
+  onChange: (key: string, value: string | boolean) => void;
 }
 
 export function DynamicFieldRenderer({ fields, values, onChange }: DynamicFieldRendererProps) {
@@ -35,8 +36,10 @@ export function DynamicFieldRenderer({ fields, values, onChange }: DynamicFieldR
     <div className="grid gap-4 md:grid-cols-2">
       {fields.map((field) => {
         const val = values[field.name];
-        const displayVal = val ?? '';
+        const displayVal = typeof val === 'string' || typeof val === 'number' ? String(val) : '';
         const type = normalizeType(field.type);
+        const parsedDate = displayVal ? parse(displayVal, 'yyyy-MM-dd', new Date()) : undefined;
+        const selectedDate = parsedDate && isValid(parsedDate) ? parsedDate : undefined;
 
         return (
           <div key={field.id || field.name} className="space-y-2">
@@ -82,7 +85,7 @@ export function DynamicFieldRenderer({ fields, values, onChange }: DynamicFieldR
                     <PopoverContent className="w-auto p-0" align="start">
                       <Calendar
                         mode="single"
-                        selected={displayVal ? parse(displayVal, 'yyyy-MM-dd', new Date()) : undefined}
+                        selected={selectedDate}
                         onSelect={(date) => {
                           if (date) {
                             onChange(field.name, format(date, 'yyyy-MM-dd'));
@@ -98,7 +101,7 @@ export function DynamicFieldRenderer({ fields, values, onChange }: DynamicFieldR
 
             {type === 'select' && field.options && (
               <Select 
-                value={val || undefined} 
+                value={typeof val === 'string' ? val : undefined}
                 onValueChange={(v) => onChange(field.name, v)}
               >
                 <FormControl>
@@ -130,9 +133,4 @@ export function DynamicFieldRenderer({ fields, values, onChange }: DynamicFieldR
       })}
     </div>
   );
-}
-
-// Stub for FormControl if not available, though ideally it should be imported from @/components/ui/form
-function FormControl({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
 }

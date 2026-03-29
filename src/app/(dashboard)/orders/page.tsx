@@ -1,12 +1,12 @@
 import { getOrders } from '@/features/orders/actions';
 import { getCaregiverOptions } from '@/features/caregivers/actions';
 import { OrderActionHandler } from '@/features/orders/components/order-action-handler';
-import { OrderList } from '@/features/orders/components/order-list';
+import { OrderList, type OrderListItem } from '@/features/orders/components/order-list';
 
 export const dynamic = 'force-dynamic';
 
 export default async function OrdersPage() {
-  const orders = (await getOrders()) || [];
+  const orders = ((await getOrders()) || []) as unknown as OrderListItem[];
   const caregiverOptions = await getCaregiverOptions();
 
   return (

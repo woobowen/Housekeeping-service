@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import { Prisma } from '@prisma/client';
 import { crypto } from 'next/dist/compiled/@edge-runtime/primitives';
 import { getGlobalFieldConfig } from '../system/actions';
+import { requireAdminSession } from '@/lib/auth/session';
 
 export type ImportError = {
   row: number;
@@ -18,6 +19,18 @@ export type ImportState = {
   count?: number;
   message?: string;
   errors?: ImportError[];
+};
+
+type ExcelCellValue = string | number | boolean | Date | null | undefined;
+type ExcelRow = Record<string, ExcelCellValue>;
+type GlobalFieldLike = {
+  name: string;
+  label: string;
+};
+
+const getCellString = (value: ExcelCellValue): string => {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'string' ? value : String(value);
 };
 
 // --- Security & Parsing Helpers ---
@@ -33,8 +46,8 @@ const isValidChineseID = (id: string): boolean => {
 
 const normalizeKey = (key: string) => key.replace(/\(.*\)|（.*）/g, '').replace(/[\*\s＊]/g, '').trim();
 
-const normalizeKeys = (row: any) => {
-  const normalized: any = {};
+const normalizeKeys = (row: ExcelRow): ExcelRow => {
+  const normalized: ExcelRow = {};
   for (const key in row) normalized[normalizeKey(key)] = row[key];
   return normalized;
 };
@@ -49,18 +62,21 @@ const extractInfoFromIdCard = (idCard: string) => {
       birthDate: new Date(year, month, day), 
       gender: parseInt(idCard.charAt(16), 10) % 2 === 1 ? '男' : '女' 
     };
-  } catch (e) { return { birthDate: null, gender: null }; }
+  } catch {
+    return { birthDate: null, gender: null };
+  }
 };
 
-const parseExcelDate = (value: any): Date | null => {
+const parseExcelDate = (value: ExcelCellValue): Date | null => {
   if (!value) return null;
   if (value instanceof Date) return value;
   if (typeof value === 'number') return new Date(Math.round((value - 25569) * 86400 * 1000));
+  if (typeof value === 'boolean') return null;
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d;
 };
 
-const parseExcelList = (val: any): string => {
+const parseExcelList = (val: ExcelCellValue): string => {
   if (!val) return JSON.stringify([]);
   const list = String(val).split(/[,，]/).map(s => s.trim()).filter(Boolean);
   return JSON.stringify(list);
@@ -68,9 +84,10 @@ const parseExcelList = (val: any): string => {
 
 const mapEducation = (v: string) => ({'小学':'PRIMARY','初中':'JUNIOR_HIGH','高中':'SENIOR_HIGH','中专':'VOCATIONAL','大专':'COLLEGE','本科':'BACHELOR'}[v] || null);
 const mapLiveInStatus = (v: string) => (v?.includes('不住家') ? 'LIVE_OUT' : v?.includes('住家') ? 'LIVE_IN' : null);
-const mapBool = (v: any) => (v === '是' || v === 'yes' || v === true || v === '1');
+const mapBool = (v: ExcelCellValue) => (v === '是' || v === 'yes' || v === true || v === '1');
 
-export async function importCaregivers(prevState: any, formData: FormData): Promise<ImportState> {
+export async function importCaregivers(_prevState: unknown, formData: FormData): Promise<ImportState> {
+  await requireAdminSession();
   const file = formData.get('file') as File;
   if (!file || file.size === 0) return { success: false, message: '请上传有效的文件' };
 
@@ -78,7 +95,7 @@ export async function importCaregivers(prevState: any, formData: FormData): Prom
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(Buffer.from(arrayBuffer), { type: 'buffer', cellDates: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData = XLSX.utils.sheet_to_json<any>(sheet, { raw: false, defval: '' });
+    const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(sheet, { raw: false, defval: '' });
 
     if (jsonData.length === 0) return { success: true, count: 0, message: 'Excel 文件中没有数据。' };
 
@@ -86,7 +103,7 @@ export async function importCaregivers(prevState: any, formData: FormData): Prom
     const existingIds = new Set((await db.caregiver.findMany({ where: { idCardNumber: { in: idCardNumbers } }, select: { idCardNumber: true } })).map(c => c.idCardNumber));
 
     const globalConfig = await getGlobalFieldConfig();
-    const allGlobalFields = Object.values(globalConfig.sections).flat();
+    const allGlobalFields = Object.values(globalConfig.sections).flat() as GlobalFieldLike[];
     const labelToNameMap: Record<string, string> = {};
     allGlobalFields.forEach(f => labelToNameMap[normalizeKey(f.label)] = f.name);
 
@@ -103,9 +120,9 @@ export async function importCaregivers(prevState: any, formData: FormData): Prom
       const row = normalizeKeys(jsonData[i]);
       const rowNum = i + 2;
       
-      const name = String(row['姓名'] || '').trim();
-      const idCard = String(row['身份证'] || '').trim();
-      const phone = String(row['手机'] || '').trim();
+      const name = getCellString(row['姓名']).trim();
+      const idCard = getCellString(row['身份证']).trim();
+      const phone = getCellString(row['手机']).trim();
 
       if (!name && !idCard && !phone) continue;
       if (!name) { errors.push({ row: rowNum, name: '未知', reason: '姓名必填' }); continue; }
@@ -114,7 +131,7 @@ export async function importCaregivers(prevState: any, formData: FormData): Prom
       if (existingIds.has(idCard) || localIdSet.has(idCard)) { errors.push({ row: rowNum, name, reason: '身份证号已存在' }); continue; }
       localIdSet.add(idCard);
 
-      const customValues: Record<string, any> = {};
+      const customValues: Record<string, ExcelCellValue> = {};
       for (const key in row) {
         if (STATIC_HEADERS.has(key)) continue;
         const val = row[key];
@@ -124,23 +141,23 @@ export async function importCaregivers(prevState: any, formData: FormData): Prom
       const idInfo = extractInfoFromIdCard(idCard);
       caregiversToInsert.push({
         idString: crypto.randomUUID(),
-        workerId: row['工号'] ? String(row['工号']) : `CG${Date.now()}${i}`,
+        workerId: row['工号'] ? getCellString(row['工号']) : `CG${Date.now()}${i}`,
         name, phone, idCardNumber: idCard,
         birthDate: parseExcelDate(row['生日'] || row['出生日期']) || idInfo.birthDate,
-        gender: row['性别'] || idInfo.gender || '女',
-        nativePlace: row['籍贯'] || '',
-        education: mapEducation(row['学历']),
-        isLiveIn: mapLiveInStatus(row['住家']),
+        gender: getCellString(row['性别']) || idInfo.gender || '女',
+        nativePlace: getCellString(row['籍贯']) || '',
+        education: mapEducation(getCellString(row['学历'])),
+        isLiveIn: mapLiveInStatus(getCellString(row['住家'])),
         isTrainee: mapBool(row['培训中']),
-        height: row['身高'] ? parseInt(row['身高'], 10) : null,
-        weight: row['体重'] ? parseInt(row['体重'], 10) : null,
-        experienceYears: row['年限'] || row['从业年限'] ? parseInt(row['年限'] || row['从业年限'], 10) : null,
-        salaryRequirements: parseInt(row['薪资'] || '0', 10),
+        height: row['身高'] ? parseInt(getCellString(row['身高']), 10) : null,
+        weight: row['体重'] ? parseInt(getCellString(row['体重']), 10) : null,
+        experienceYears: row['年限'] || row['从业年限'] ? parseInt(getCellString(row['年限'] || row['从业年限']), 10) : null,
+        salaryRequirements: parseInt(getCellString(row['薪资'] || '0'), 10),
         jobTypes: parseExcelList(row['工种']),
         specialties: parseExcelList(row['特长']),
         certificates: parseExcelList(row['证书']),
         cookingSkills: parseExcelList(row['烹饪']),
-        notes: row['备注'] || '',
+        notes: getCellString(row['备注']) || '',
         status: 'PENDING', level: 'TRAINEE',
         customData: Object.keys(customValues).length > 0 ? JSON.stringify(customValues) : null,
       });

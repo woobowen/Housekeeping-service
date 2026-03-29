@@ -37,12 +37,8 @@ const DEFAULT_CHROMIUM_EXECUTABLE_PATH = "/home/addaswsw/.cache/ms-playwright/ch
 let keepAliveTimer = null;
 let isShuttingDown = false;
 let backend = null;
-let initialized = false;
-let clientInfo = null;
 let wireProtocol = null;
 let allowStdoutFrameWrite = false;
-const stdinStream = process.stdin;
-const stdoutStream = process.stdout;
 const STDIN_BUFFER_SIZE = 64 * 1024;
 
 /**

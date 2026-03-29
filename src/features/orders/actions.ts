@@ -8,6 +8,9 @@ import { revalidatePath } from 'next/cache';
 import { deserializeCustomData } from '@/lib/utils/json-tunnel';
 import { sanitizeData } from '@/lib/utils/serialization';
 import { differenceInDays, startOfDay, endOfDay, format } from 'date-fns';
+import { requireAdminSession } from '@/lib/auth/session';
+import { endOfMonth, isAfter, parseISO } from 'date-fns';
+import { randomUUID } from 'crypto';
 
 // -----------------------------------------------------------------------------
 // 1. Types & Schemas
@@ -73,11 +76,52 @@ type Adjustment = z.infer<typeof adjustmentSchema> & {
   substituteName?: string;
 };
 
+type OrderSettlementHistoryItem = {
+  month: string;
+  actualDays: number;
+  totalAmount: number;
+  type: 'FULL' | 'PARTIAL';
+  createdAt: string;
+};
+
+type OrderCustomData = {
+  adjustments?: Adjustment[];
+  settlementHistory?: OrderSettlementHistoryItem[];
+} & Record<string, unknown>;
+
+type OrderInputValue = FormDataEntryValue | string | number | Date | null | undefined;
+type OrderInput = Record<string, OrderInputValue>;
+
 const DIRECT_ORDER_KEYS = [
   'caregiverId', 'startDate', 'endDate', 'clientLocation', 
   'serviceType', 'address', 'contactName', 'contactPhone', 
   'remarks', 'dispatcherName', 'dispatcherPhone', 'managementFee'
 ];
+
+const ACTIVE_ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'SERVING'] as const;
+const ORDER_TRANSACTION_OPTIONS = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  maxWait: 10_000,
+  timeout: 20_000,
+} as const;
+
+const settleOrderSchema = z.object({
+  orderId: z.string().min(1, '订单 ID 不能为空'),
+  actualDays: z.number().min(0, '实际工作天数不能为负数'),
+  totalAmount: z.number().min(0, '结算金额不能为负数'),
+  targetMonth: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+});
+
+function upsertSettlementHistory(
+  history: OrderSettlementHistoryItem[],
+  nextItem: OrderSettlementHistoryItem,
+): OrderSettlementHistoryItem[] {
+  const filteredHistory: OrderSettlementHistoryItem[] = history.filter(
+    (item: OrderSettlementHistoryItem) => item.month !== nextItem.month,
+  );
+
+  return [...filteredHistory, nextItem];
+}
 
 // -----------------------------------------------------------------------------
 // 2. Core Engine: Salary & Adjustment
@@ -111,6 +155,68 @@ async function calculateOrderTotal(
   };
 }
 
+async function recomputeCaregiverStatus(
+  tx: Prisma.TransactionClient,
+  caregiverId: string
+): Promise<void> {
+  const activeOrderCount: number = await tx.order.count({
+    where: {
+      caregiverId,
+      status: {
+        in: [...ACTIVE_ORDER_STATUSES],
+      },
+    },
+  });
+
+  await tx.caregiver.update({
+    where: { idString: caregiverId },
+    data: {
+      status: activeOrderCount > 0 ? 'BUSY' : 'IDLE',
+    },
+  });
+}
+
+async function acquireCaregiverScheduleLocks(
+  tx: Prisma.TransactionClient,
+  caregiverIds: string[],
+): Promise<void> {
+  const normalizedIds: string[] = [...new Set(caregiverIds)].sort();
+
+  // 中文说明：同一护理员的排班写入必须串行化，避免两个并发请求在“先检查后写入”的时间窗内同时通过。
+  for (const caregiverId of normalizedIds) {
+    // 中文说明：事务级 advisory lock 只需要执行成功，不需要读取返回值；
+    // 这里必须使用 executeRaw，避免 Prisma 反序列化 PostgreSQL `void` 返回类型时抛错。
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${caregiverId}))`;
+  }
+}
+
+async function resolveCaregiverByInput(
+  caregiverIdOrKeyword: string,
+  caregiverPhone?: string
+) {
+  const trimmedCaregiverInput: string = caregiverIdOrKeyword.trim();
+  if (!trimmedCaregiverInput) {
+    return null;
+  }
+
+  if (trimmedCaregiverInput.startsWith('cl') || trimmedCaregiverInput.length > 20) {
+    return prisma.caregiver.findUnique({
+      where: { idString: trimmedCaregiverInput },
+    });
+  }
+
+  return prisma.caregiver.findFirst({
+    where: {
+      OR: [
+        { name: trimmedCaregiverInput },
+        { workerId: trimmedCaregiverInput },
+        { phone: trimmedCaregiverInput },
+        caregiverPhone ? { phone: caregiverPhone } : undefined,
+      ].filter(Boolean) as Prisma.CaregiverWhereInput[],
+    },
+  });
+}
+
 // -----------------------------------------------------------------------------
 // 3. Actions
 // -----------------------------------------------------------------------------
@@ -118,8 +224,9 @@ async function calculateOrderTotal(
 /**
  * Adds an adjustment to an existing order and triggers recalculation.
  */
-export async function addOrderAdjustment(orderId: string, data: any) {
+export async function addOrderAdjustment(orderId: string, data: unknown) {
   try {
+    await requireAdminSession();
     const validatedAdj = adjustmentSchema.parse(data);
     
     // 1. Fetch Order and primary Caregiver
@@ -135,7 +242,7 @@ export async function addOrderAdjustment(orderId: string, data: any) {
 
     // 2. Calculate daily rate for adjustment
     const { dailyRate } = await calculateOrderTotal(monthlySalary, dailySalary, order.startDate, order.endDate, managementFee, []);
-    let calculatedAmount = dailyRate * validatedAdj.value;
+    const calculatedAmount = dailyRate * validatedAdj.value;
     let substituteName = '';
 
     if (validatedAdj.substituteId) {
@@ -148,8 +255,8 @@ export async function addOrderAdjustment(orderId: string, data: any) {
     }
 
     // 3. Update Order customData
-    const currentCustomData = deserializeCustomData(order.customData) || {};
-    const adjustments: Adjustment[] = currentCustomData.adjustments || [];
+    const currentCustomData = deserializeCustomData<OrderCustomData>(order.customData);
+    const adjustments: Adjustment[] = currentCustomData.adjustments ?? [];
     
     const newAdj: Adjustment = {
       ...validatedAdj,
@@ -183,17 +290,23 @@ export async function addOrderAdjustment(orderId: string, data: any) {
     revalidatePath('/orders');
     return { success: true, data: sanitizeData(updatedOrder) };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Add Adjustment Error:', error);
-    return { success: false, message: error.message || '调整失败' };
+    return { success: false, message: error instanceof Error ? error.message : '调整失败' };
   }
 }
 
-async function checkCaregiverAvailability(caregiverId: string, startDate: Date, endDate: Date, excludeOrderId?: string) {
+async function checkCaregiverAvailability(
+  tx: Prisma.TransactionClient,
+  caregiverId: string,
+  startDate: Date,
+  endDate: Date,
+  excludeOrderId?: string,
+) {
   const normalizedStart = startOfDay(startDate);
   const normalizedEnd = endOfDay(endDate);
   
-  const conflict = await prisma.order.findFirst({
+  const conflict = await tx.order.findFirst({
     where: {
       caregiverId,
       status: { not: 'CANCELLED' }, // Even COMPLETED orders imply that time was occupied
@@ -213,9 +326,10 @@ async function checkCaregiverAvailability(caregiverId: string, startDate: Date, 
   }
 }
 
-export async function createOrder(formData: any) {
+export async function createOrder(formData: FormData | OrderInput) {
   try {
-    const rawData = formData instanceof FormData 
+    await requireAdminSession();
+    const rawData: OrderInput = formData instanceof FormData
       ? Object.fromEntries(formData.entries()) 
       : formData;
 
@@ -231,84 +345,52 @@ export async function createOrder(formData: any) {
     const validatedFields = createOrderSchema.parse(dataToValidate);
 
     // 1. Availability Check
-    let caregiverId = rawData.caregiverId;
-    if (caregiverId && !caregiverId.startsWith('cl') && caregiverId.length <= 20) {
-       const cg = await prisma.caregiver.findFirst({
-         where: { OR: [{ name: caregiverId }, { workerId: caregiverId }, { phone: caregiverId }] }
-       });
-       if (cg) caregiverId = cg.idString;
-    }
-    
-    if (caregiverId) {
-      await checkCaregiverAvailability(caregiverId, validatedFields.startDate, validatedFields.endDate);
-    }
+    const caregiver = rawData.caregiverId
+      ? await resolveCaregiverByInput(String(rawData.caregiverId), validatedFields.caregiverPhone)
+      : null;
 
-    let caregiver = null;
-    const inputCaregiverId = rawData.caregiverId;
-
-    // -----------------------------------------------------------------------------
-    // CAREGIVER LOOKUP LOGIC
-    // -----------------------------------------------------------------------------
-    
-    if (inputCaregiverId && (inputCaregiverId.startsWith('cl') || inputCaregiverId.length > 20)) {
-      caregiver = await prisma.caregiver.findUnique({
-        where: { idString: inputCaregiverId },
-      });
-      if (!caregiver) {
-        return { success: false, error: 'CAREGIVER_NOT_FOUND', message: '指定的家政员不存在' };
-      }
-    } else if (inputCaregiverId) {
-      caregiver = await prisma.caregiver.findFirst({
-        where: {
-          OR: [
-            { name: inputCaregiverId },
-            { workerId: inputCaregiverId },
-            { phone: inputCaregiverId },
-            { phone: validatedFields.caregiverPhone }
-          ]
-        }
-      });
-      
-      if (!caregiver) {
-        return { success: false, error: 'CAREGIVER_NOT_FOUND', message: '指定的家政员不存在' };
-      }
-    } else {
+    if (!caregiver) {
       return { success: false, error: 'CAREGIVER_NOT_FOUND', message: '请选择或输入家政员' };
     }
-
-    // Salary Configuration Resolution
-    const mSalary = validatedFields.monthlySalary || (caregiver.monthlySalary ? Number(caregiver.monthlySalary) : null);
-    const dSalary = validatedFields.dailySalary || null;
-
-    if (!mSalary && !dSalary) {
-      return { success: false, error: 'MISSING_SALARY_CONFIG', message: `请为家政员 ${caregiver.name} 设置月薪或日薪标准。` };
-    }
-
-    // Initial Calculation (No adjustments yet)
-    const { totalAmount, dailyRate, baseDays } = await calculateOrderTotal(
-      mSalary,
-      dSalary,
-      validatedFields.startDate,
-      validatedFields.endDate,
-      validatedFields.managementFee,
-      []
-    );
 
     const { customDataString } = serializeCustomData(rawData, DIRECT_ORDER_KEYS);
 
     const newOrder = await prisma.$transaction(async (tx) => {
-      const orderNo = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      
-      // Update Caregiver Status to BUSY
-      await tx.caregiver.update({
-        where: { idString: caregiver!.idString },
-        data: { status: 'BUSY' }
+      await acquireCaregiverScheduleLocks(tx, [caregiver.idString]);
+      await checkCaregiverAvailability(tx, caregiver.idString, validatedFields.startDate, validatedFields.endDate);
+
+      // 中文说明：冲突校验与薪资解析必须放进同一事务，确保锁住后的读写视图一致。
+      const caregiverSnapshot = await tx.caregiver.findUnique({
+        where: { idString: caregiver.idString },
+        select: { idString: true, name: true, monthlySalary: true },
       });
 
-      return await tx.order.create({
+      if (!caregiverSnapshot) {
+        throw new Error('CAREGIVER_NOT_FOUND');
+      }
+
+      const mSalary = validatedFields.monthlySalary || (caregiverSnapshot.monthlySalary ? Number(caregiverSnapshot.monthlySalary) : null);
+      const dSalary = validatedFields.dailySalary || null;
+
+      if (!mSalary && !dSalary) {
+        throw new Error(`请为家政员 ${caregiverSnapshot.name} 设置月薪或日薪标准。`);
+      }
+
+      const { totalAmount, dailyRate, baseDays } = await calculateOrderTotal(
+        mSalary,
+        dSalary,
+        validatedFields.startDate,
+        validatedFields.endDate,
+        validatedFields.managementFee,
+        []
+      );
+
+      const orderNo = `ORD-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+      
+      const createdOrder = await tx.order.create({
         data: {
           orderNo,
-          caregiverId: caregiver!.idString,
+          caregiverId: caregiverSnapshot.idString,
           startDate: startOfDay(validatedFields.startDate),
           endDate: endOfDay(validatedFields.endDate),
           status: validatedFields.status || 'PENDING',
@@ -319,8 +401,9 @@ export async function createOrder(formData: any) {
           monthlySalary: mSalary ? new Prisma.Decimal(mSalary) : null,
           durationDays: validatedFields.durationDays || baseDays,
 
-          totalAmount: new Prisma.Decimal(validatedFields.totalAmount || totalAmount),
-          amount: new Prisma.Decimal((validatedFields.totalAmount || totalAmount) - validatedFields.managementFee), // amount is just caregiver part
+          // 中文说明：订单金额必须以服务端计算结果为准，禁止信任前端回传总额。
+          totalAmount: new Prisma.Decimal(totalAmount),
+          amount: new Prisma.Decimal(totalAmount - validatedFields.managementFee),
           managementFee: new Prisma.Decimal(validatedFields.managementFee),
           clientName: validatedFields.clientName,
           dispatcherName: validatedFields.dispatcherName,
@@ -334,23 +417,30 @@ export async function createOrder(formData: any) {
           customData: customDataString,
         },
       });
-    });
+
+      await recomputeCaregiverStatus(tx, caregiverSnapshot.idString);
+      return createdOrder;
+    }, ORDER_TRANSACTION_OPTIONS);
 
     revalidatePath('/orders');
     revalidatePath('/caregivers');
     return { success: true, data: sanitizeData(newOrder) };
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
        return { success: false, error: 'VALIDATION_ERROR', errors: error.flatten().fieldErrors };
     }
-    return { success: false, error: 'SERVER_ERROR', message: '创建订单失败: ' + (error.message || '未知错误') };
+    return {
+      success: false,
+      error: 'SERVER_ERROR',
+      message: `创建订单失败: ${error instanceof Error ? error.message : '未知错误'}`,
+    };
   }
 }
 
-export async function updateOrder(id: string, data: any) {
+export async function updateOrder(id: string, data: OrderInput) {
   try {
-    console.log("Updating order:", id, data);
+    await requireAdminSession();
 
     // Pre-process data to ensure contact fields are present if derived from client fields
     const dataToValidate = {
@@ -362,80 +452,128 @@ export async function updateOrder(id: string, data: any) {
 
     const validatedFields = createOrderSchema.parse(dataToValidate);
 
-    // 1. Availability Check (excluding current order)
     const order = await prisma.order.findUnique({ 
       where: { id }, 
-      select: { caregiverId: true, customData: true } 
+      select: { caregiverId: true, customData: true, status: true } 
     });
-    
-    if (order) {
-      await checkCaregiverAvailability(order.caregiverId, validatedFields.startDate, validatedFields.endDate, id);
+
+    if (!order) {
+      return { success: false, error: 'ORDER_NOT_FOUND', message: '订单不存在' };
     }
 
-    const { totalAmount, dailyRate, baseDays } = await calculateOrderTotal(
-      validatedFields.monthlySalary || null,
-      validatedFields.dailySalary || null,
-      validatedFields.startDate,
-      validatedFields.endDate,
-      validatedFields.managementFee,
-      []
-    );
+    const targetCaregiver = await resolveCaregiverByInput(String(data.caregiverId || order.caregiverId), validatedFields.caregiverPhone);
+    if (!targetCaregiver) {
+      return { success: false, error: 'CAREGIVER_NOT_FOUND', message: '指定的家政员不存在' };
+    }
+
+    const currentCustomData = deserializeCustomData<OrderCustomData>(order.customData);
+    const adjustments: Adjustment[] = Array.isArray(currentCustomData.adjustments)
+      ? currentCustomData.adjustments
+      : [];
 
     const { customDataString } = serializeCustomData(data, DIRECT_ORDER_KEYS);
 
-    const updatedOrder = await prisma.order.update({
-      where: { id },
-      data: {
-        startDate: startOfDay(validatedFields.startDate),
-        endDate: endOfDay(validatedFields.endDate),
-        status: validatedFields.status,
-        salaryMode: 'DAILY',
-        dailySalary: new Prisma.Decimal(dailyRate),
-        monthlySalary: validatedFields.monthlySalary ? new Prisma.Decimal(validatedFields.monthlySalary) : null,
-        durationDays: validatedFields.durationDays || baseDays,
-        totalAmount: new Prisma.Decimal(validatedFields.totalAmount || totalAmount),
-        amount: new Prisma.Decimal((validatedFields.totalAmount || totalAmount) - validatedFields.managementFee),
-        managementFee: new Prisma.Decimal(validatedFields.managementFee),
-        clientName: validatedFields.clientName,
-        dispatcherName: validatedFields.dispatcherName,
-        dispatcherPhone: validatedFields.dispatcherPhone,
-        clientLocation: validatedFields.clientLocation,
-        serviceType: validatedFields.serviceType,
-        address: validatedFields.address,
-        contactName: validatedFields.contactName,
-        contactPhone: validatedFields.contactPhone,
-        remarks: validatedFields.remarks,
-        customData: customDataString || (order?.customData),
-      },
-    });
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      await acquireCaregiverScheduleLocks(tx, [targetCaregiver.idString, order.caregiverId]);
+      await checkCaregiverAvailability(tx, targetCaregiver.idString, validatedFields.startDate, validatedFields.endDate, id);
 
-    console.log("Update Success for ID:", id);
+      const targetCaregiverSnapshot = await tx.caregiver.findUnique({
+        where: { idString: targetCaregiver.idString },
+        select: { idString: true, monthlySalary: true },
+      });
+
+      if (!targetCaregiverSnapshot) {
+        throw new Error('CAREGIVER_NOT_FOUND');
+      }
+
+      const { totalAmount, dailyRate, baseDays } = await calculateOrderTotal(
+        validatedFields.monthlySalary || (targetCaregiverSnapshot.monthlySalary ? Number(targetCaregiverSnapshot.monthlySalary) : null),
+        validatedFields.dailySalary || null,
+        validatedFields.startDate,
+        validatedFields.endDate,
+        validatedFields.managementFee,
+        adjustments
+      );
+
+      const nextCustomData = customDataString
+        ? JSON.stringify({
+            ...deserializeCustomData<Record<string, unknown>>(customDataString),
+            adjustments,
+            settlementHistory: currentCustomData.settlementHistory ?? [],
+          })
+        : JSON.stringify({
+            ...currentCustomData,
+            adjustments,
+          });
+
+      const updated = await tx.order.update({
+        where: { id },
+        data: {
+          caregiverId: targetCaregiverSnapshot.idString,
+          startDate: startOfDay(validatedFields.startDate),
+          endDate: endOfDay(validatedFields.endDate),
+          status: validatedFields.status,
+          salaryMode: 'DAILY',
+          dailySalary: new Prisma.Decimal(dailyRate),
+          monthlySalary: validatedFields.monthlySalary ? new Prisma.Decimal(validatedFields.monthlySalary) : null,
+          durationDays: validatedFields.durationDays || baseDays,
+          totalAmount: new Prisma.Decimal(totalAmount),
+          amount: new Prisma.Decimal(totalAmount - validatedFields.managementFee),
+          managementFee: new Prisma.Decimal(validatedFields.managementFee),
+          clientName: validatedFields.clientName,
+          dispatcherName: validatedFields.dispatcherName,
+          dispatcherPhone: validatedFields.dispatcherPhone,
+          clientLocation: validatedFields.clientLocation,
+          serviceType: validatedFields.serviceType,
+          address: validatedFields.address,
+          contactName: validatedFields.contactName,
+          contactPhone: validatedFields.contactPhone,
+          remarks: validatedFields.remarks,
+          customData: nextCustomData,
+        },
+      });
+
+      await recomputeCaregiverStatus(tx, targetCaregiverSnapshot.idString);
+      if (targetCaregiverSnapshot.idString !== order.caregiverId) {
+        await recomputeCaregiverStatus(tx, order.caregiverId);
+      }
+
+      return updated;
+    }, ORDER_TRANSACTION_OPTIONS);
+
     revalidatePath('/orders');
     revalidatePath(`/orders/${id}`);
     revalidatePath('/caregivers');
     revalidatePath('/salary-settlement');
     
     return { success: true, data: sanitizeData(updatedOrder) };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update Order Error:', error);
     if (error instanceof z.ZodError) {
       return { success: false, error: 'VALIDATION_ERROR', errors: error.flatten().fieldErrors };
     }
-    return { success: false, error: 'SERVER_ERROR', message: '更新订单失败: ' + (error.message || '未知错误') };
+    return {
+      success: false,
+      error: 'SERVER_ERROR',
+      message: `更新订单失败: ${error instanceof Error ? error.message : '未知错误'}`,
+    };
   }
 }
 
 export async function settleOrder(orderId: string, actualDays: number, totalAmount: number, targetMonth?: string) {
   try {
+    await requireAdminSession();
+    const parsedInput = settleOrderSchema.parse({ orderId, actualDays, totalAmount, targetMonth });
     const updatedOrder = await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
-        where: { id: orderId },
+        where: { id: parsedInput.orderId },
         select: { caregiverId: true, endDate: true, customData: true }
       });
 
       if (!order) throw new Error('ORDER_NOT_FOUND');
+      await acquireCaregiverScheduleLocks(tx, [order.caregiverId]);
 
-      const month = targetMonth || format(new Date(), 'yyyy-MM');
+      const month = parsedInput.targetMonth || format(new Date(), 'yyyy-MM');
       const monthEnd = endOfDay(endOfMonth(parseISO(`${month}-01`)));
       
       // Detection: Is it a partial settlement?
@@ -443,13 +581,11 @@ export async function settleOrder(orderId: string, actualDays: number, totalAmou
       const isPartial = isAfter(order.endDate, monthEnd);
 
       // Update Custom Data to track this settlement instance
-      const currentCustomData = deserializeCustomData(order.customData) || {};
-      const settlements = currentCustomData.settlementHistory || [];
-      
-      settlements.push({
+      const currentCustomData = deserializeCustomData<OrderCustomData>(order.customData);
+      const settlements = upsertSettlementHistory(currentCustomData.settlementHistory ?? [], {
         month,
-        actualDays,
-        totalAmount,
+        actualDays: parsedInput.actualDays,
+        totalAmount: parsedInput.totalAmount,
         type: isPartial ? 'PARTIAL' : 'FULL',
         createdAt: new Date().toISOString()
       });
@@ -462,7 +598,7 @@ export async function settleOrder(orderId: string, actualDays: number, totalAmou
           status: isPartial ? 'CONFIRMED' : 'COMPLETED', 
           paymentStatus: 'PAID', // Mark as paid for this billing action
           actualWorkedDays: {
-             increment: actualDays
+             increment: parsedInput.actualDays
           },
           // For partial, we might want to store total paid so far or just update the main field
           // Here we follow the rule: only mark as COMPLETED if fully contained/finished.
@@ -475,33 +611,29 @@ export async function settleOrder(orderId: string, actualDays: number, totalAmou
 
       // 2. Release Caregiver ONLY if it's a FULL settlement
       if (!isPartial) {
-        await tx.caregiver.update({
-          where: { idString: order.caregiverId },
-          data: { status: 'IDLE' }
-        });
+        await recomputeCaregiverStatus(tx, order.caregiverId);
       }
 
       return updated;
-    });
+    }, ORDER_TRANSACTION_OPTIONS);
 
     revalidatePath('/orders');
     revalidatePath('/caregivers');
     revalidatePath('/salary-settlement');
     return { success: true, data: sanitizeData(updatedOrder) };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Settle Order Error:', error);
-    return { success: false, message: '结单失败: ' + (error.message || '未知错误') };
+    return { success: false, message: `结单失败: ${error instanceof Error ? error.message : '未知错误'}` };
   }
 }
 
 // Add necessary imports at the top if missing
-import { endOfMonth, isAfter, parseISO } from 'date-fns';
-
 /**
  * Completes an order and releases the caregiver.
  */
 export async function completeOrder(orderId: string) {
   try {
+    await requireAdminSession();
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       select: { caregiverId: true }
@@ -510,6 +642,8 @@ export async function completeOrder(orderId: string) {
     if (!order) return { success: false, message: '订单不存在' };
 
     await prisma.$transaction(async (tx) => {
+      await acquireCaregiverScheduleLocks(tx, [order.caregiverId]);
+
       // 1. Update Order Status
       await tx.order.update({
         where: { id: orderId },
@@ -517,23 +651,21 @@ export async function completeOrder(orderId: string) {
       });
 
       // 2. Release Caregiver
-      await tx.caregiver.update({
-        where: { idString: order.caregiverId },
-        data: { status: 'IDLE' }
-      });
-    });
+      await recomputeCaregiverStatus(tx, order.caregiverId);
+    }, ORDER_TRANSACTION_OPTIONS);
 
     revalidatePath('/orders');
     revalidatePath('/caregivers');
     return { success: true, message: '订单已完成，家政员已释放' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Complete Order Error:', error);
-    return { success: false, message: '操作失败: ' + error.message };
+    return { success: false, message: `操作失败: ${error instanceof Error ? error.message : '未知错误'}` };
   }
 }
 
 export async function deleteOrder(id: string) {
   try {
+    await requireAdminSession();
     const order = await prisma.order.findUnique({
       where: { id },
       select: { caregiverId: true, status: true }
@@ -542,33 +674,30 @@ export async function deleteOrder(id: string) {
     if (!order) throw new Error('ORDER_NOT_FOUND');
 
     await prisma.$transaction(async (tx) => {
-      // 1. If the order was active (SERVING/CONFIRMED), release the caregiver
-      if (['CONFIRMED', 'PENDING'].includes(order.status)) {
-        await tx.caregiver.update({
-          where: { idString: order.caregiverId },
-          data: { status: 'IDLE' }
-        });
-      }
+      await acquireCaregiverScheduleLocks(tx, [order.caregiverId]);
 
-      // 2. Delete the order
+      // 1. If the order was active (SERVING/CONFIRMED), release the caregiver
       await tx.order.delete({
         where: { id }
       });
-    });
+
+      await recomputeCaregiverStatus(tx, order.caregiverId);
+    }, ORDER_TRANSACTION_OPTIONS);
 
     revalidatePath('/orders');
     revalidatePath('/caregivers');
     revalidatePath('/salary-settlement');
     return { success: true, message: '订单删除成功' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete Order Error:', error);
-    return { success: false, message: '删除失败: ' + (error.message || '未知错误') };
+    return { success: false, message: `删除失败: ${error instanceof Error ? error.message : '未知错误'}` };
   }
 }
 
 export async function getOrders(query: string = '', searchType: string = 'all') {
   try {
-    let whereClause: any = {};
+    await requireAdminSession();
+    let whereClause: Prisma.OrderWhereInput = {};
 
     if (query) {
       if (searchType === 'caregiver') {

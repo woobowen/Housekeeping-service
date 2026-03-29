@@ -42,7 +42,46 @@ interface OrderAdjustment {
 }
 
 interface OrderViewModalProps {
-  order: any;
+  order: OrderViewState;
+}
+
+interface OrderViewCaregiver {
+  name?: string | null;
+  workerId?: string | null;
+}
+
+interface OrderViewState {
+  id: string;
+  orderNo: string;
+  status: string;
+  clientName?: string | null;
+  clientLocation?: string | null;
+  dispatcherName?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  paymentStatus?: string | null;
+  salaryMode?: 'MONTHLY' | 'DAILY' | string | null;
+  amount?: number | string | null;
+  managementFee?: number | string | null;
+  totalAmount?: number | string | null;
+  monthlySalary?: number | string | null;
+  dailySalary?: number | string | null;
+  durationDays?: number | null;
+  estimatedDays?: number | null;
+  createdAt?: Date | string | null;
+  startDate?: Date | string | null;
+  endDate?: Date | string | null;
+  serviceType?: string | null;
+  requirements?: string | null;
+  remarks?: string | null;
+  address?: string | null;
+  caregiver?: OrderViewCaregiver | null;
+  customData?: Record<string, unknown> | string | null;
+}
+
+interface OrderAdjustmentPayload {
+  totalAmount: number | string;
+  customData: Record<string, unknown> | string | null;
 }
 
 const ADJUSTMENT_LABELS: Record<AdjustmentType, string> = {
@@ -55,7 +94,7 @@ export function OrderViewModal({ order }: OrderViewModalProps) {
   const router = useRouter();
   const [adjustmentOpen, setAdjustmentOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [currentOrder, setCurrentOrder] = useState(order);
+  const [currentOrder, setCurrentOrder] = useState<OrderViewState>(order);
   const [adjustmentForm, setAdjustmentForm] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     type: 'OVERTIME' as AdjustmentType,
@@ -143,10 +182,11 @@ export function OrderViewModal({ order }: OrderViewModalProps) {
       }
 
       // 中文说明：后端只返回订单本体，这里只增量更新金额和 customData，避免丢失关联展示字段。
-      setCurrentOrder((prev: any) => ({
+      const adjustmentData = result.data as unknown as OrderAdjustmentPayload;
+      setCurrentOrder((prev: OrderViewState) => ({
         ...prev,
-        totalAmount: result.data.totalAmount,
-        customData: result.data.customData,
+        totalAmount: adjustmentData.totalAmount,
+        customData: adjustmentData.customData,
       }));
 
       toast.success('订单调整已写入');
@@ -354,7 +394,7 @@ export function OrderViewModal({ order }: OrderViewModalProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm bg-muted/30 p-4 rounded-md">
                       {Object.entries(parsedCustomData)
                         .filter(([key]) => key !== 'adjustments')
-                        .map(([key, value]) => (
+                        .map(([key, value]: [string, unknown]) => (
                           <div key={key} className="flex flex-col">
                             <span className="text-muted-foreground text-xs">{key}</span>
                             <span className="font-medium">{String(value)}</span>

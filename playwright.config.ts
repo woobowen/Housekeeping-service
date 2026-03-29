@@ -15,8 +15,6 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
-  globalSetup: path.join(PROJECT_ROOT, "tests", "e2e", "global.setup.ts"),
-  globalTeardown: path.join(PROJECT_ROOT, "tests", "e2e", "global.teardown.ts"),
   reporter: [
     ["list"],
     [
@@ -28,6 +26,12 @@ export default defineConfig({
     ],
   ],
   outputDir: path.join(PROJECT_ROOT, "test-results"),
+  webServer: {
+    command: "npm run start:e2e",
+    url: "http://127.0.0.1:3000/login",
+    timeout: 120_000,
+    reuseExistingServer: false,
+  },
   use: {
     baseURL: "http://127.0.0.1:3000",
     headless: true,
